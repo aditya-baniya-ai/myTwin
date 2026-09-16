@@ -2,15 +2,17 @@ import SwiftUI
 import EventKit
 
 struct ContentView: View {
-    @State private var health = HealthManager()
+    @State private var health: HealthManager
     @State private var calendar: CalendarManager
     @State private var chat: ChatManager
 
     init() {
-        // The chat reads the same calendar the home screen shows.
+        // The chat uses the same health and calendar data the home screen shows.
+        let health = HealthManager()
         let calendar = CalendarManager()
+        _health = State(initialValue: health)
         _calendar = State(initialValue: calendar)
-        _chat = State(initialValue: ChatManager(calendar: calendar))
+        _chat = State(initialValue: ChatManager(calendar: calendar, health: health))
     }
 
     var body: some View {
@@ -64,7 +66,10 @@ struct ContentView: View {
                     Label("Ask myTwin", systemImage: "bubble.left.and.text.bubble.right")
                 }
             }
-            .task { calendar.loadTodayEvents() }
+            .task {
+                await health.refreshAuthorizationState()
+                calendar.loadTodayEvents()
+            }
             .refreshable {
                 await health.refresh()
                 calendar.loadTodayEvents()

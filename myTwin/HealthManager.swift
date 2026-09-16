@@ -45,6 +45,34 @@ final class HealthManager {
         }
     }
 
+    /// HealthKit never reveals whether read access was granted, but it does say whether we have
+    /// already asked. Without this the app would show "Connect Apple Health" again on every launch.
+    func refreshAuthorizationState() async {
+        guard HKHealthStore.isHealthDataAvailable() else { return }
+        let status = try? await store.statusForAuthorizationRequest(toShare: [], read: readTypes)
+        guard status == .unnecessary else { return }
+        isAuthorized = true
+        await refresh()
+    }
+
+    /// Today's health numbers as plain text, for the chatbot to read.
+    func summaryText() async -> String {
+        guard isAuthorized else {
+            return "Health data isn't connected. The user can tap Connect Apple Health on the home screen."
+        }
+        await refresh()
+
+        var lines: [String] = []
+        if let value = snapshot.sleepHours { lines.append("Sleep last night: \(String(format: "%.1f", value)) hours") }
+        if let value = snapshot.hrvMs { lines.append("HRV (24h average): \(String(format: "%.0f", value)) ms") }
+        if let value = snapshot.restingHR { lines.append("Resting heart rate: \(String(format: "%.0f", value)) bpm") }
+        if let value = snapshot.respiratoryRate { lines.append("Respiratory rate: \(String(format: "%.1f", value)) breaths per minute") }
+        if let value = snapshot.steps { lines.append("Steps today: \(String(format: "%.0f", value))") }
+        if let value = snapshot.activeEnergyKcal { lines.append("Active energy today: \(String(format: "%.0f", value)) kcal") }
+
+        return lines.isEmpty ? "No health data has been recorded yet." : lines.joined(separator: "\n")
+    }
+
     func refresh() async {
         let now = Date()
         let dayAgo = now.addingTimeInterval(-86_400)

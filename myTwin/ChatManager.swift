@@ -16,7 +16,7 @@ final class ChatManager {
 
     private let session: LanguageModelSession
 
-    init(calendar: CalendarManager) {
+    init(calendar: CalendarManager, health: HealthManager) {
         self.calendar = calendar
         // Wording tested against Apple's safety filter: giving the assistant a name plus the date
         // got calendar questions blocked, and without the rules about saving the model claimed it
@@ -26,12 +26,15 @@ final class ChatManager {
                 TodayEventsTool(calendar: calendar),
                 AddEventTool(calendar: calendar),
                 MoveEventTool(calendar: calendar),
+                RemoveEventTool(calendar: calendar),
+                HealthSummaryTool(health: health),
             ],
             instructions: """
             Help the user plan their day.
             Use getTodayEvents to answer questions about today's schedule, and only mention events it returns.
-            To add or move an event today, use addEvent or moveEvent. They don't save anything: the app shows the user a Confirm button. Tell the user to tap Confirm.
-            You can only change today's events, and deleting isn't supported yet. If the user asks for that, suggest the Calendar app.
+            Use getHealthSummary to answer questions about sleep, heart rate, HRV, steps or energy, and only use numbers it returns.
+            To add, move or remove an event today, use addEvent, moveEvent or removeEvent. They don't save anything: the app shows the user a Confirm button. Tell the user to tap Confirm.
+            You can only change today's events.
             Keep answers short and simple. When it helps, suggest one next step.
             """
         )
@@ -88,6 +91,20 @@ nonisolated struct TodayEventsTool: Tool {
     }
 }
 
+/// Reads today's health numbers.
+nonisolated struct HealthSummaryTool: Tool {
+    let name = "getHealthSummary"
+    let description = "Gets the user's latest health numbers: sleep, HRV, resting heart rate, respiratory rate, steps and active energy."
+    let health: HealthManager
+
+    @Generable
+    struct Arguments {}
+
+    func call(arguments: Arguments) async throws -> String {
+        await health.summaryText()
+    }
+}
+
 /// Suggests a new event today. Nothing is saved until the user taps Confirm.
 nonisolated struct AddEventTool: Tool {
     let name = "addEvent"
@@ -130,5 +147,22 @@ nonisolated struct MoveEventTool: Tool {
 
     func call(arguments: Arguments) async throws -> String {
         await calendar.proposeMove(title: arguments.title, hour: arguments.hour, minute: arguments.minute)
+    }
+}
+
+/// Suggests removing one of today's events. Nothing is removed until the user taps Confirm.
+nonisolated struct RemoveEventTool: Tool {
+    let name = "removeEvent"
+    let description = "Suggests removing one of today's events. The user must tap Confirm before it is removed."
+    let calendar: CalendarManager
+
+    @Generable
+    struct Arguments {
+        @Guide(description: "Title of the event to remove")
+        let title: String
+    }
+
+    func call(arguments: Arguments) async throws -> String {
+        await calendar.proposeRemove(title: arguments.title)
     }
 }
