@@ -1,0 +1,66 @@
+{
+  "baseline_window_days": 14,
+  "min_history_days": 7,
+  "targets": {
+    "fatigue": {
+      "intercept": -0.8329946741067594,
+      "weights": {
+        "overall_score_z": 0.06117064810093373,
+        "asleep_z": 0.05469013979180638,
+        "efficiency": 0.00891401199464082
+      },
+      "feature_stats": {
+        "overall_score_z": {
+          "mean": 0.012186037131552453,
+          "std": 1.1103332439395799
+        },
+        "asleep_z": {
+          "mean": -0.023439882565660448,
+          "std": 1.5155747425003452
+        },
+        "efficiency": {
+          "mean": 94.58729250143102,
+          "std": 3.8073178087255917
+        }
+      },
+      "scale": {
+        "min": 0.0,
+        "max": 5.0
+      },
+      "people": 16,
+      "days": 1747,
+      "mean_correlation_gain": 0.1870228267281473,
+      "people_helped": "12/16"
+    },
+    "readiness": {
+      "intercept": -1.7515975549906475,
+      "weights": {
+        "overall_score_z": 0.2246451107705637,
+        "asleep_z": -0.04617411244821415,
+        "efficiency": 0.018579924314423457
+      },
+      "feature_stats": {
+        "overall_score_z": {
+          "mean": 0.012186037131552453,
+          "std": 1.1103332439395799
+        },
+        "asleep_z": {
+          "mean": -0.023439882565660448,
+          "std": 1.5155747425003452
+        },
+        "efficiency": {
+          "mean": 94.58729250143102,
+          "std": 3.8073178087255917
+        }
+      },
+      "scale": {
+        "min": 0.0,
+        "max": 10.0
+      },
+      "people": 16,
+      "days": 1747,
+      "mean_correlation_gain": 0.11378357875559728,
+      "people_helped": "13/16"
+    }
+  }
+}

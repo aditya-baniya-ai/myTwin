@@ -1,0 +1,11 @@
+# Training data: 16 people's health data, CC BY-NC. Refetch with ml/download_pmdata.py
+ml/data/
+
+# Python
+ml/.venv/
+__pycache__/
+*.pyc
+
+# Xcode
+DerivedData/
+*.xcuserstate
