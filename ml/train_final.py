@@ -18,7 +18,9 @@ from sklearn.linear_model import RidgeCV
 
 warnings.filterwarnings("ignore")
 
-FEATURES = ["overall_score_z", "asleep_z", "efficiency"]
+# Only signals every watch can deliver through HealthKit: Fitbit's sleep score is
+# proprietary, so Apple Watch and Garmin users could never supply it.
+FEATURES = ["asleep_z", "efficiency", "deep_z", "rem_z", "resting_heart_rate_z"]
 TARGETS = ["fatigue", "readiness"]
 MIN_HISTORY = 7          # days of your own reports before the app says anything
 BASELINE_WINDOW = 14     # days used for the rolling "your normal"
