@@ -8,12 +8,15 @@ struct ContentView: View {
     @State private var chat: ChatManager
     @State private var voice = VoiceManager()
     @State private var diary = EnergyDiary()
+    @State private var avatar = AvatarChoice()
 
     @State private var showChat = false
+    @State private var showPicker = false
     @State private var energy: EnergyReading?
     @State private var todayFeatures: [String: Double]?
     @State private var coverage: [String: Int] = [:]
     @State private var nightsFound = 0
+    @State private var week: [(date: Date, band: EnergyReading.Band?)] = []
     @State private var searchedDays = 0
 
     private let energyModel = EnergyModel()
@@ -32,6 +35,9 @@ struct ContentView: View {
             List {
                 header
 
+                if health.isAuthorized, !week.isEmpty {
+                    Section("Your last 7 days") { WeekStrip(days: week) }
+                }
                 if health.isAuthorized {
                     Section("Today's activity") {
                         ActivityRings(energyKcal: health.snapshot.activeEnergyKcal,
@@ -86,6 +92,9 @@ struct ContentView: View {
             .navigationDestination(isPresented: $showChat) {
                 ChatView(chat: chat, voice: voice)
             }
+            .sheet(isPresented: $showPicker) {
+                AvatarPicker(choice: avatar, charge: charge)
+            }
             .safeAreaInset(edge: .bottom) { voiceBar }
             .task {
                 await health.refreshAuthorizationState()
@@ -122,8 +131,18 @@ struct ContentView: View {
         Section {
             VStack(spacing: 10) {
                 BrandTitle()
-                AvatarView(charge: charge)
+                AvatarView(charge: charge, style: avatar.style)
+                    .onTapGesture {
+                        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+                        showChat = true
+                    }
+                    .onLongPressGesture { showPicker = true }
+                    .accessibilityLabel("Your twin, \(Int(charge * 100)) percent charged. Tap to chat.")
                 chargeLabel
+                Button("Change character") { showPicker = true }
+                    .font(.caption)
+                    .buttonStyle(.plain)
+                    .foregroundStyle(BrandTitle.brand[1])
                 verdict
             }
             .frame(maxWidth: .infinity)
@@ -208,6 +227,7 @@ struct ContentView: View {
 
     private func record(rating: Double) {
         guard let todayFeatures else { return }
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
         diary.record(rating: rating, features: todayFeatures)
         Task { await updateEnergy() }
     }
@@ -227,6 +247,12 @@ struct ContentView: View {
         searchedDays = searched
         nightsFound = energyModel.usableNights(in: history).count
         todayFeatures = energyModel.features(from: history)
+        // Replay the model for each of the last seven days, using only what was known then.
+        week = (0..<7).compactMap { offset in
+            let slice = Array(history.dropFirst(offset))
+            guard let day = slice.first else { return nil }
+            return (day.date, energyModel.reading(from: slice, diary: diary)?.band)
+        }
         withAnimation(.easeOut(duration: 0.4)) {
             energy = energyModel.reading(from: history, diary: diary)
         }
