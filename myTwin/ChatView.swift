@@ -3,7 +3,7 @@ import FoundationModels
 
 struct ChatView: View {
     let chat: ChatManager
-    @State private var voice = VoiceManager()
+    let voice: VoiceManager  // listening starts on the home screen, so it is shared
     @State private var input = ""
 
     var body: some View {
@@ -27,7 +27,6 @@ struct ChatView: View {
                       systemImage: voice.speaksAnswers ? "speaker.wave.2" : "speaker.slash")
             }
         }
-        .onDisappear { Task { await voice.stopConversation() } }
     }
 
     private var conversation: some View {
@@ -35,7 +34,7 @@ struct ChatView: View {
             ScrollView {
                 LazyVStack(spacing: 12) {
                     if chat.messages.isEmpty {
-                        Text("Try: \"What's on my calendar today?\"")
+                        Text("Say \"my twin\" to wake me, or type below.")
                             .foregroundStyle(.secondary)
                             .padding(.top, 40)
                     }
@@ -71,32 +70,23 @@ struct ChatView: View {
             }
             .defaultScrollAnchor(.bottom)
 
-            if let note = voiceNote {
+            if let note = voice.statusNote {
                 Text(note)
                     .font(.footnote)
-                    .foregroundStyle(voice.status == .listening ? Color.secondary : Color.red)
+                    .foregroundStyle(voice.isAwake ? Color.accentColor : Color.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal)
             }
 
             HStack {
                 Button {
-                    Task { await toggleHandsFree() }
+                    Task { await toggleLiveVoice() }
                 } label: {
-                    Image(systemName: voice.handsFree ? "waveform.circle.fill" : "waveform.circle")
+                    Image(systemName: voice.isLive ? "mic.fill" : "mic")
                         .font(.title2)
-                        .foregroundStyle(voice.handsFree ? Color.red : Color.accentColor)
+                        .foregroundStyle(voice.isLive ? Color.red : Color.accentColor)
                 }
                 .disabled(voice.status == .preparing)
-
-                Button {
-                    Task { await toggleMicrophone() }
-                } label: {
-                    Image(systemName: voice.status == .listening ? "mic.fill" : "mic")
-                        .font(.title2)
-                        .foregroundStyle(voice.status == .listening ? Color.red : Color.accentColor)
-                }
-                .disabled(chat.isResponding || voice.status == .preparing || voice.handsFree)
 
                 TextField("Ask about your day", text: $input)
                     .textFieldStyle(.roundedBorder)
@@ -111,37 +101,16 @@ struct ChatView: View {
         }
         // Show the words as they are recognised.
         .onChange(of: voice.transcript) { _, heard in input = heard }
-        // Read each new answer aloud.
-        .onChange(of: chat.messages.count) { _, _ in
-            guard let last = chat.messages.last, !last.isUser else { return }
-            voice.speak(last.text)
-        }
     }
 
-    private var voiceNote: String? {
-        switch voice.status {
-        case .idle: nil
-        case .preparing: "Getting the offline voice model ready…"
-        case .listening: voice.handsFree ? "Hands-free on. Just talk, and talk over me to interrupt."
-                                         : "Listening… I'll send when you stop talking."
-        case .unavailable(let reason): reason
-        }
-    }
-
-    private func toggleHandsFree() async {
-        if voice.handsFree {
-            await voice.stopConversation()
+    private func toggleLiveVoice() async {
+        if voice.isLive {
+            await voice.stopLiveVoice()
         } else {
-            await voice.startConversation { send($0) }
-        }
-    }
-
-    private func toggleMicrophone() async {
-        voice.stopSpeaking()  // talking over it should interrupt it
-        if voice.status == .listening {
-            await voice.finish()
-        } else {
-            await voice.start { send($0) }
+            await voice.startLiveVoice { text in
+                guard !chat.isResponding else { return }
+                Task { await chat.send(text) }
+            }
         }
     }
 

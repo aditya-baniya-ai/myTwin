@@ -1,12 +1,13 @@
 import Foundation
 import AVFoundation
+import CoreMedia
 import Speech
 
-/// Listens with Apple's on-device recogniser and speaks answers back.
+/// Live voice: listens for the wake phrase "my twin", then takes spoken instructions,
+/// speaks answers, and lets you talk over it.
 ///
-/// In hands-free mode the microphone stays on while the app talks, so you can interrupt it.
-/// That means the microphone also hears the app's own voice: echo cancellation removes most of
-/// it, and `echoOverlap` throws away whatever gets through.
+/// The microphone stays on while the app talks, so it also hears the app's own voice.
+/// Echo cancellation removes most of it and `echoOverlap` throws away the rest.
 @MainActor
 @Observable
 final class VoiceManager {
@@ -22,10 +23,29 @@ final class VoiceManager {
         var errorDescription: String? { "This device's microphone format isn't supported." }
     }
 
+    /// How long a pause means "your sentence is finished". Too short and it cuts people off.
+    private let pauseBeforeSending: TimeInterval = 2.0
+    /// Back to sleep after this much quiet, so it stops reacting to the room.
+    private let sleepAfterIdle: TimeInterval = 30
+    /// How long the app's own voice keeps echoing after it stops talking.
+    private let echoTail: Duration = .milliseconds(800)
+
     var status: Status = .idle
     var transcript = ""
     var speaksAnswers = true
-    private(set) var handsFree = false
+    private(set) var isLive = false
+    private(set) var isAwake = false
+
+    /// One line of plain status, shown on both the home screen and the chat.
+    var statusNote: String? {
+        switch status {
+        case .idle: nil
+        case .preparing: "Getting the offline voice model ready…"
+        case .listening: isAwake ? "Listening. Just talk, and talk over me to interrupt."
+                                 : "Say \"my twin\" to wake me."
+        case .unavailable(let reason): reason
+        }
+    }
 
     private let locale = Locale.current
     private let engine = AVAudioEngine()
@@ -40,37 +60,33 @@ final class VoiceManager {
     private var lastHeard = Date.now
     private var lastSpoken = ""
     private var isSpeakingNow = false
+    // Where the last sent sentence ended in the audio. Results before this are already
+    // spoken for: without this the recogniser re-delivers them and the app hears you twice.
+    private var sentUpTo = CMTime.zero
+    private var latestResultEnd = CMTime.zero
 
-    // MARK: - Hands-free conversation
+    // MARK: - Starting and stopping
 
-    /// Keeps listening after every answer, so the phone can stay in your pocket.
-    func startConversation(onSentence: @escaping (String) -> Void) async {
-        handsFree = true
-        await start(onSentence: onSentence)
-    }
-
-    func stopConversation() async {
-        handsFree = false
-        stopSpeaking()
-        await stop()
-    }
-
-    // MARK: - Listening
-
-    /// Starts listening. `onSentence` is called each time you stop talking.
-    func start(onSentence: @escaping (String) -> Void) async {
-        guard status != .listening else { return }
+    /// Starts listening. Nothing is sent until you say the wake phrase.
+    func startLiveVoice(onSentence: @escaping (String) -> Void) async {
+        guard !isLive else { return }
+        isLive = true
+        isAwake = false
         self.onSentence = onSentence
         status = .preparing
         transcript = ""
         finalText = ""
+        sentUpTo = .zero
+        latestResultEnd = .zero
 
         do {
             guard await requestPermissions() else {
+                isLive = false
                 status = .unavailable("Microphone or speech access is off. Turn it on in Settings.")
                 return
             }
             guard await SpeechTranscriber.supportedLocales.contains(where: matches) else {
+                isLive = false
                 status = .unavailable("On-device dictation isn't available for your language.")
                 return
             }
@@ -94,21 +110,18 @@ final class VoiceManager {
             watchForSilence()
             status = .listening
         } catch {
-            await stop()
+            await stopLiveVoice()
             status = .unavailable(error.localizedDescription)
         }
     }
 
-    /// Stops listening and sends whatever was heard.
-    func finish() async {
-        let sentence = transcript
-        let handler = onSentence
-        await stop()
-        if !sentence.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { handler?(sentence) }
-    }
-
     /// Stops listening and releases the microphone.
-    func stop() async {
+    func stopLiveVoice() async {
+        isLive = false
+        isAwake = false
+        onSentence = nil
+        stopSpeaking()
+
         silenceTask?.cancel()
         resultsTask?.cancel()
         silenceTask = nil
@@ -122,6 +135,8 @@ final class VoiceManager {
         analyzer = nil
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
 
+        transcript = ""
+        finalText = ""
         if status == .listening || status == .preparing { status = .idle }
     }
 
@@ -132,9 +147,9 @@ final class VoiceManager {
         guard speaksAnswers else { return }
         stopSpeaking()
 
-        // In hands-free the recording session stays as it is: switching categories would
-        // tear down the microphone and the echo cancellation with it.
-        if !handsFree {
+        // While listening, leave the recording session alone: switching categories would tear
+        // down the microphone and its echo cancellation.
+        if status != .listening {
             let session = AVAudioSession.sharedInstance()
             try? session.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
             try? session.setActive(true)
@@ -165,10 +180,11 @@ final class VoiceManager {
             }
             guard let self, !Task.isCancelled else { return }
             isSpeakingNow = false
-            try? await Task.sleep(for: .milliseconds(800))  // echo tail: shorter and it hears itself
+            try? await Task.sleep(for: echoTail)
             guard !Task.isCancelled else { return }
             transcript = ""
             finalText = ""
+            sentUpTo = latestResultEnd
             lastHeard = .now
         }
     }
@@ -215,8 +231,12 @@ final class VoiceManager {
             do {
                 for try await result in transcriber.results {
                     guard let self else { return }
-                    let text = String(result.text.characters)
+                    latestResultEnd = max(latestResultEnd, result.range.end)
 
+                    // Skip audio that was already sent as a sentence.
+                    guard result.range.end > sentUpTo else { continue }
+
+                    let text = String(result.text.characters)
                     if isSpeakingNow {
                         guard isInterruption(text) else {
                             // The app hearing itself: throw it away.
@@ -228,18 +248,33 @@ final class VoiceManager {
                         finalText = ""
                     }
 
-                    if result.isFinal {
-                        finalText += text
-                        transcript = finalText
-                    } else {
-                        transcript = finalText + text  // live guess while you're still talking
+                    let heard = result.isFinal ? finalText + text : finalText + text
+                    if result.isFinal { finalText += text }
+
+                    if isAwake {
+                        transcript = heard
+                        lastHeard = .now
+                    } else if let command = commandAfterWakePhrase(in: heard) {
+                        wakeUp(with: command)
+                    } else if result.isFinal {
+                        // Not addressed to the app: forget it and keep waiting.
+                        finalText = ""
+                        transcript = ""
+                        sentUpTo = latestResultEnd
                     }
-                    lastHeard = .now
                 }
             } catch {
                 self?.status = .unavailable("Couldn't hear you: \(error.localizedDescription)")
             }
         }
+    }
+
+    private func wakeUp(with command: String) {
+        isAwake = true
+        finalText = command
+        transcript = command
+        lastHeard = .now
+        if command.isEmpty { speak("Yes?") }
     }
 
     /// Real speech while the app is talking, rather than its own voice coming back.
@@ -254,27 +289,29 @@ final class VoiceManager {
         return echoOverlap(heard: heard, spoken: lastSpoken) < 0.6
     }
 
-    /// Sends the sentence once you have been quiet for a moment.
+    /// Sends the sentence once you have been quiet for a moment, then keeps listening.
     private func watchForSilence() {
         lastHeard = .now
         silenceTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(250))
                 guard let self, status == .listening else { return }
-                let heardSomething = !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                guard heardSomething, !isSpeakingNow, Date.now.timeIntervalSince(lastHeard) > 1.5 else { continue }
+                let quietFor = Date.now.timeIntervalSince(lastHeard)
+                let sentence = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
 
-                let sentence = transcript
-                if handsFree {
-                    // Keep the microphone open for the next thing you say.
-                    transcript = ""
-                    finalText = ""
-                    lastHeard = .now
-                    onSentence?(sentence)
-                } else {
-                    await finish()
-                    return
+                guard isAwake else { continue }
+
+                if sentence.isEmpty {
+                    if !isSpeakingNow, quietFor > sleepAfterIdle { isAwake = false }
+                    continue
                 }
+                guard !isSpeakingNow, quietFor > pauseBeforeSending else { continue }
+
+                sentUpTo = latestResultEnd  // don't hear this sentence a second time
+                transcript = ""
+                finalText = ""
+                lastHeard = .now
+                onSentence?(sentence)
             }
         }
     }
@@ -322,6 +359,14 @@ nonisolated func convertBuffer(_ buffer: AVAudioPCMBuffer,
     }
     guard error == nil, output.frameLength > 0 else { return nil }
     return output
+}
+
+/// Finds "my twin" (or "hey twin") and returns whatever was said after it, "" if nothing.
+/// Returns nil when the phrase isn't there, so the app stays asleep.
+nonisolated func commandAfterWakePhrase(in text: String) -> String? {
+    let phrase = /(?i)\b(?:hey|my|hi)[\s,-]*twins?\b[\s,.!?]*/
+    guard let match = text.firstMatch(of: phrase) else { return nil }
+    return String(text[match.range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
 }
 
 /// How much of what was heard also appears in what the app just said, 0…1.
