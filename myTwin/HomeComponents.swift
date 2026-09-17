@@ -21,51 +21,6 @@ struct BrandTitle: View {
     }
 }
 
-/// A stand-in for you: the aura takes its colour from today's prediction, so the screen
-/// says how the day looks before you read a word of it.
-struct TwinAvatar: View {
-    let band: EnergyReading.Band?
-    @State private var appeared = false
-    @State private var breathing = false
-
-    private var colors: [Color] {
-        switch band {
-        case .above: [Color(red: 0.20, green: 0.85, blue: 0.60), Color(red: 0.40, green: 0.95, blue: 0.85)]
-        case .normal: [Color(red: 0.30, green: 0.70, blue: 1.00), Color(red: 0.55, green: 0.50, blue: 0.98)]
-        case .below: [Color(red: 1.00, green: 0.62, blue: 0.24), Color(red: 0.98, green: 0.40, blue: 0.45)]
-        case nil: [Color.gray.opacity(0.7), Color.gray.opacity(0.45)]
-        }
-    }
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .fill(RadialGradient(colors: [colors[0].opacity(0.55), .clear],
-                                     center: .center, startRadius: 10, endRadius: 90))
-                .blur(radius: 14)
-                .scaleEffect(breathing ? 1.12 : 0.94)
-
-            Circle()
-                .strokeBorder(AngularGradient(colors: colors + [colors[0]], center: .center), lineWidth: 7)
-                .shadow(color: colors[0].opacity(0.6), radius: 10)
-
-            Circle().fill(.regularMaterial)
-
-            Image(systemName: "figure.stand")
-                .font(.system(size: 60, weight: .semibold))
-                .foregroundStyle(LinearGradient(colors: colors, startPoint: .top, endPoint: .bottom))
-                .symbolEffect(.bounce, value: appeared)
-        }
-        .frame(width: 132, height: 132)
-        .scaleEffect(appeared ? 1 : 0.82)
-        .opacity(appeared ? 1 : 0)
-        .onAppear {
-            withAnimation(.spring(response: 0.8, dampingFraction: 0.65)) { appeared = true }
-            withAnimation(.easeInOut(duration: 3).repeatForever(autoreverses: true)) { breathing = true }
-        }
-    }
-}
-
 /// One ring of the activity dial.
 private struct Ring: View {
     let progress: Double

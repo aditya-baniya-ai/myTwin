@@ -122,7 +122,8 @@ struct ContentView: View {
         Section {
             VStack(spacing: 10) {
                 BrandTitle()
-                TwinAvatar(band: energy?.band)
+                AvatarView(charge: charge)
+                chargeLabel
                 verdict
             }
             .frame(maxWidth: .infinity)
@@ -130,6 +131,18 @@ struct ContentView: View {
         }
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
+    }
+
+    /// Right now, as a fraction: the prediction sets the start, the clock drains it.
+    private var charge: Double {
+        energyModel?.charge(for: energy) ?? 0.85
+    }
+
+    private var chargeLabel: some View {
+        Text("\(Int(charge * 100))% charged")
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .contentTransition(.numericText())
     }
 
     @ViewBuilder private var verdict: some View {
