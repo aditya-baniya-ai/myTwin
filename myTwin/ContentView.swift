@@ -7,9 +7,10 @@ struct ContentView: View {
     @State private var calendar: CalendarManager
     @State private var chat: ChatManager
     @State private var voice = VoiceManager()
+    @State private var diary = EnergyDiary()
+
     @State private var showChat = false
     @State private var energy: EnergyReading?
-    @State private var diary = EnergyDiary()
     @State private var todayFeatures: [String: Double]?
     @State private var coverage: [String: Int] = [:]
     @State private var nightsFound = 0
@@ -29,40 +30,27 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             List {
+                header
+
                 if health.isAuthorized {
-                    Section("Today") {
-                        energyRow
-                        if todayFeatures != nil, !diary.ratedToday() { ratingRow }
+                    Section("Today's activity") {
+                        ActivityRings(energyKcal: health.snapshot.activeEnergyKcal,
+                                      steps: health.snapshot.steps,
+                                      sleepHours: health.snapshot.sleepHours)
                     }
-                }
-                if health.isAuthorized {
-                    Section("What myTwin can read") {
-                        CoverageSection(coverage: coverage, windowDays: 90)
+                    if todayFeatures != nil, !diary.ratedToday() {
+                        Section { ratingRow }
                     }
-                }
-                if !health.isAuthorized {
+                } else {
                     Section {
                         Button("Connect Apple Health") {
                             Task { await health.requestAuthorization(); await updateEnergy() }
                         }
                     } footer: {
-                        Text("myTwin reads sleep, HRV, heart rate and activity to predict your energy.")
-                    }
-                } else {
-                    Section("Recovery") {
-                        metric("HRV (24h avg)", health.snapshot.hrvMs, format: "%.0f ms")
-                        metric("Resting heart rate", health.snapshot.restingHR, format: "%.0f bpm")
-                        metric("Respiratory rate", health.snapshot.respiratoryRate, format: "%.1f /min")
-                        metric("Sleep last night", health.snapshot.sleepHours, format: "%.1f h")
-                    }
-                    Section("Activity today") {
-                        metric("Steps", health.snapshot.steps, format: "%.0f")
-                        metric("Active energy", health.snapshot.activeEnergyKcal, format: "%.0f kcal")
+                        Text("myTwin reads your sleep, heart rate and activity to work out how today compares with your normal.")
                     }
                 }
-                if let error = health.errorMessage {
-                    Text(error).foregroundStyle(.red)
-                }
+
                 Section("Today's calendar") {
                     if !calendar.isAuthorized {
                         Button("Connect Calendar") {
@@ -79,8 +67,17 @@ struct ContentView: View {
                         }
                     }
                 }
+
+                if health.isAuthorized {
+                    Section("What myTwin can read") {
+                        CoverageSection(coverage: coverage, windowDays: 90)
+                    }
+                }
+                if let error = health.errorMessage {
+                    Text(error).foregroundStyle(.red)
+                }
             }
-            .navigationTitle("myTwin")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 Button("Ask myTwin", systemImage: "bubble.left.and.text.bubble.right") {
                     showChat = true
@@ -119,19 +116,41 @@ struct ContentView: View {
         }
     }
 
-    @ViewBuilder private var energyRow: some View {
+    // MARK: - Pieces of the screen
+
+    private var header: some View {
+        Section {
+            VStack(spacing: 10) {
+                BrandTitle()
+                TwinAvatar(band: energy?.band)
+                verdict
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, 4)
+        }
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+    }
+
+    @ViewBuilder private var verdict: some View {
         if let energy {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(spacing: 4) {
                 Text(energy.headline)
-                    .font(.headline)
+                    .font(.title3.weight(.semibold))
+                    .multilineTextAlignment(.center)
                 Text(energy.explanation)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
             }
-        } else if energyModel == nil {
-            Text("Energy model unavailable.").foregroundStyle(.secondary)
+            .transition(.opacity.combined(with: .move(edge: .bottom)))
+        } else if !health.isAuthorized {
+            Text("Connect Apple Health to see how today compares with your normal.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
         } else {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(spacing: 4) {
                 Text(nightsFound == 0
                      ? "No nights with sleep or heart data found\(searchedDays > 0 ? " in the last \(searchedDays) days" : "")."
                      : "Found \(nightsFound) night\(nightsFound == 1 ? "" : "s") of data in the last \(searchedDays) days.")
@@ -140,6 +159,7 @@ struct ContentView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
+            .multilineTextAlignment(.center)
         }
     }
 
@@ -147,17 +167,31 @@ struct ContentView: View {
     @ViewBuilder private var ratingRow: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("How's your energy today?")
-                .font(.subheadline)
-            HStack {
+                .font(.subheadline.weight(.medium))
+            HStack(spacing: 8) {
                 ForEach(1...5, id: \.self) { value in
                     Button("\(value)") { record(rating: Double(value)) }
                         .buttonStyle(.bordered)
+                        .tint(BrandTitle.brand[1])
                         .frame(maxWidth: .infinity)
                 }
             }
         }
         .padding(.vertical, 4)
     }
+
+    @ViewBuilder private var voiceBar: some View {
+        if let note = voice.statusNote {
+            Text(note)
+                .font(.footnote)
+                .foregroundStyle(voice.isAwake ? Color.accentColor : Color.secondary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .background(.bar)
+        }
+    }
+
+    // MARK: - Actions
 
     private func record(rating: Double) {
         guard let todayFeatures else { return }
@@ -180,23 +214,10 @@ struct ContentView: View {
         searchedDays = searched
         nightsFound = energyModel.usableNights(in: history).count
         todayFeatures = energyModel.features(from: history)
-        energy = energyModel.reading(from: history, diary: diary)
-        coverage = await health.coverage(days: 90)
-    }
-
-    @ViewBuilder private var voiceBar: some View {
-        if let note = voice.statusNote {
-            Text(note)
-                .font(.footnote)
-                .foregroundStyle(voice.isAwake ? Color.accentColor : Color.secondary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-                .background(.bar)
+        withAnimation(.easeOut(duration: 0.4)) {
+            energy = energyModel.reading(from: history, diary: diary)
         }
-    }
-
-    private func metric(_ label: String, _ value: Double?, format: String) -> some View {
-        LabeledContent(label, value: value.map { String(format: format, $0) } ?? "—")
+        coverage = await health.coverage(days: 90)
     }
 }
 
