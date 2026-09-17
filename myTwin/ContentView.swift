@@ -9,6 +9,8 @@ struct ContentView: View {
     @State private var voice = VoiceManager()
     @State private var showChat = false
     @State private var energy: EnergyReading?
+    @State private var diary = EnergyDiary()
+    @State private var todayFeatures: [String: Double]?
 
     private let energyModel = EnergyModel()
 
@@ -25,7 +27,10 @@ struct ContentView: View {
         NavigationStack {
             List {
                 if health.isAuthorized {
-                    Section("Today") { energyRow }
+                    Section("Today") {
+                        energyRow
+                        if todayFeatures != nil, !diary.ratedToday() { ratingRow }
+                    }
                 }
                 if !health.isAuthorized {
                     Section {
@@ -111,7 +116,7 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(energy.headline)
                     .font(.headline)
-                Text("Compared with your own last \(energy.daysOfHistory) days of sleep.")
+                Text(energy.explanation)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -122,6 +127,28 @@ struct ContentView: View {
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
+    }
+
+    /// Asking is the only way the app can learn what a good day feels like for you.
+    @ViewBuilder private var ratingRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("How's your energy today?")
+                .font(.subheadline)
+            HStack {
+                ForEach(1...5, id: \.self) { value in
+                    Button("\(value)") { record(rating: Double(value)) }
+                        .buttonStyle(.bordered)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func record(rating: Double) {
+        guard let todayFeatures else { return }
+        diary.record(rating: rating, features: todayFeatures)
+        Task { await updateEnergy() }
     }
 
     /// Listens for "my twin" from the moment the app opens.
@@ -135,7 +162,9 @@ struct ContentView: View {
 
     private func updateEnergy() async {
         guard health.isAuthorized, let energyModel else { return }
-        energy = energyModel.reading(from: await health.dailyHistory(days: 15))
+        let history = await health.dailyHistory(days: 15)
+        todayFeatures = energyModel.features(from: history)
+        energy = energyModel.reading(from: history, diary: diary)
     }
 
     @ViewBuilder private var voiceBar: some View {
