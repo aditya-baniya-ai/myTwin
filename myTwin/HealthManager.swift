@@ -95,6 +95,92 @@ final class HealthManager {
         )
     }
 
+    // MARK: - History for the energy model
+
+    /// One entry per day, most recent first, holding the signals the energy model compares
+    /// against your own baseline. Sleep is counted from 6pm the evening before to noon.
+    func dailyHistory(days: Int) async -> [DaySignals] {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: .now)
+        guard let spanStart = calendar.date(byAdding: .day, value: -(days + 1), to: today) else { return [] }
+
+        let predicate = HKQuery.predicateForSamples(withStart: spanStart, end: .now)
+        let descriptor = HKSampleQueryDescriptor(
+            predicates: [.categorySample(type: HKCategoryType(.sleepAnalysis), predicate: predicate)],
+            sortDescriptors: [SortDescriptor(\.startDate)]
+        )
+        let samples = (try? await descriptor.result(for: store)) ?? []
+        let restingByDay = await restingHeartRateByDay(from: spanStart)
+
+        let asleepValues = HKCategoryValueSleepAnalysis.allAsleepValues.map(\.rawValue)
+        let deepValue = HKCategoryValueSleepAnalysis.asleepDeep.rawValue
+        let remValue = HKCategoryValueSleepAnalysis.asleepREM.rawValue
+        let awakeValue = HKCategoryValueSleepAnalysis.awake.rawValue
+        let inBedValue = HKCategoryValueSleepAnalysis.inBed.rawValue
+
+        return (0..<days).compactMap { offset in
+            guard let day = calendar.date(byAdding: .day, value: -offset, to: today),
+                  let from = calendar.date(byAdding: .hour, value: -6, to: day),
+                  let until = calendar.date(byAdding: .hour, value: 12, to: day) else { return nil }
+
+            let night = samples.filter { $0.startDate >= from && $0.startDate < until }
+            var signals = DaySignals(date: day)
+            signals.restingHR = restingByDay[day]
+            guard !night.isEmpty else { return signals }
+
+            let asleep = minutes(of: night.filter { asleepValues.contains($0.value) })
+            let awake = minutes(of: night.filter { $0.value == awakeValue })
+            let inBed = minutes(of: night.filter { $0.value == inBedValue })
+
+            signals.asleepMinutes = asleep > 0 ? asleep : nil
+            signals.deepMinutes = minutes(of: night.filter { $0.value == deepValue })
+            signals.remMinutes = minutes(of: night.filter { $0.value == remValue })
+
+            // Apple Watch often records no "in bed" time, so fall back to asleep + awake.
+            let denominator = inBed > 0 ? inBed : asleep + awake
+            if asleep > 0, denominator > 0 { signals.efficiency = 100 * asleep / denominator }
+            return signals
+        }
+    }
+
+    /// Overlapping samples are merged, because the watch and phone can both record a night.
+    private func minutes(of samples: [HKCategorySample]) -> Double {
+        let sorted = samples.sorted { $0.startDate < $1.startDate }
+        var total: TimeInterval = 0
+        var current: (start: Date, end: Date)?
+        for sample in sorted {
+            if let open = current, sample.startDate <= open.end {
+                current = (open.start, max(open.end, sample.endDate))
+            } else {
+                if let open = current { total += open.end.timeIntervalSince(open.start) }
+                current = (sample.startDate, sample.endDate)
+            }
+        }
+        if let open = current { total += open.end.timeIntervalSince(open.start) }
+        return total / 60
+    }
+
+    private func restingHeartRateByDay(from start: Date) async -> [Date: Double] {
+        let calendar = Calendar.current
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: .now)
+        let descriptor = HKStatisticsCollectionQueryDescriptor(
+            predicate: .quantitySample(type: HKQuantityType(.restingHeartRate), predicate: predicate),
+            options: .discreteAverage,
+            anchorDate: calendar.startOfDay(for: start),
+            intervalComponents: DateComponents(day: 1)
+        )
+        guard let collection = try? await descriptor.result(for: store) else { return [:] }
+
+        var byDay: [Date: Double] = [:]
+        let unit = HKUnit.count().unitDivided(by: .minute())
+        collection.enumerateStatistics(from: start, to: .now) { statistics, _ in
+            if let value = statistics.averageQuantity()?.doubleValue(for: unit) {
+                byDay[calendar.startOfDay(for: statistics.startDate)] = value
+            }
+        }
+        return byDay
+    }
+
     // MARK: - Queries
 
     private func statistics(_ id: HKQuantityTypeIdentifier, options: HKStatisticsOptions,

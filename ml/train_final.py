@@ -85,13 +85,17 @@ for target in TARGETS:
     usable = ~np.isnan(deviation)
     model = build_model().fit(X[usable], deviation[usable])
 
-    # The app standardises features the same way, using these stats.
+    # Reference only: the weights below apply to RAW feature values.
     stats = {c: {"mean": float(X[c].mean()), "std": float(X[c].std() or 1.0)} for c in FEATURES}
+    predicted_deviation = model.predict(X[usable])
+    bands = {"low": float(np.percentile(predicted_deviation, 33)),
+             "high": float(np.percentile(predicted_deviation, 67))}
     export["targets"][target] = {
         "intercept": float(model.intercept_),
         "weights": {c: float(w) for c, w in zip(FEATURES, model.coef_)},
         "feature_stats": stats,
         "scale": {"min": float(df[target].min()), "max": float(df[target].max())},
+        "bands": bands,
         "people": int(frame.person.nunique()),
         "days": int(len(frame)),
         "mean_correlation_gain": float(gains.mean()),

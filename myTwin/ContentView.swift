@@ -8,6 +8,9 @@ struct ContentView: View {
     @State private var chat: ChatManager
     @State private var voice = VoiceManager()
     @State private var showChat = false
+    @State private var energy: EnergyReading?
+
+    private let energyModel = EnergyModel()
 
     init() {
         // The chat uses the same health and calendar data the home screen shows.
@@ -21,10 +24,13 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             List {
+                if health.isAuthorized {
+                    Section("Today") { energyRow }
+                }
                 if !health.isAuthorized {
                     Section {
                         Button("Connect Apple Health") {
-                            Task { await health.requestAuthorization() }
+                            Task { await health.requestAuthorization(); await updateEnergy() }
                         }
                     } footer: {
                         Text("myTwin reads sleep, HRV, heart rate and activity to predict your energy.")
@@ -74,11 +80,13 @@ struct ContentView: View {
             .task {
                 await health.refreshAuthorizationState()
                 calendar.loadTodayEvents()
+                await updateEnergy()
                 await listen()
             }
             .refreshable {
                 await health.refresh()
                 calendar.loadTodayEvents()
+                await updateEnergy()
             }
             // Don't hold the microphone while the app is in the background.
             .onChange(of: scenePhase) { _, phase in
@@ -98,6 +106,24 @@ struct ContentView: View {
         }
     }
 
+    @ViewBuilder private var energyRow: some View {
+        if let energy {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(energy.headline)
+                    .font(.headline)
+                Text("Compared with your own last \(energy.daysOfHistory) days of sleep.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        } else if energyModel == nil {
+            Text("Energy model unavailable.").foregroundStyle(.secondary)
+        } else {
+            Text("myTwin needs about \(energyModel?.daysNeeded ?? 7) nights of sleep data before it can compare today with your normal.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
+
     /// Listens for "my twin" from the moment the app opens.
     private func listen() async {
         await voice.startLiveVoice { sentence in
@@ -105,6 +131,11 @@ struct ContentView: View {
             guard !chat.isResponding else { return }
             Task { await chat.send(sentence) }
         }
+    }
+
+    private func updateEnergy() async {
+        guard health.isAuthorized, let energyModel else { return }
+        energy = energyModel.reading(from: await health.dailyHistory(days: 15))
     }
 
     @ViewBuilder private var voiceBar: some View {
