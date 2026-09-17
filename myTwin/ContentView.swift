@@ -11,6 +11,7 @@ struct ContentView: View {
     @State private var energy: EnergyReading?
     @State private var diary = EnergyDiary()
     @State private var todayFeatures: [String: Double]?
+    @State private var coverage: [String: Int] = [:]
 
     private let energyModel = EnergyModel()
 
@@ -30,6 +31,11 @@ struct ContentView: View {
                     Section("Today") {
                         energyRow
                         if todayFeatures != nil, !diary.ratedToday() { ratingRow }
+                    }
+                }
+                if health.isAuthorized {
+                    Section("What myTwin can read") {
+                        CoverageSection(coverage: coverage, windowDays: 90)
                     }
                 }
                 if !health.isAuthorized {
@@ -165,6 +171,7 @@ struct ContentView: View {
         let history = await health.dailyHistory(days: 15)
         todayFeatures = energyModel.features(from: history)
         energy = energyModel.reading(from: history, diary: diary)
+        coverage = await health.coverage(days: 90)
     }
 
     @ViewBuilder private var voiceBar: some View {

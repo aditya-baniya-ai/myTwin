@@ -95,6 +95,59 @@ final class HealthManager {
         )
     }
 
+    // MARK: - What this phone actually has
+
+    /// How many of the last `days` days hold data for each signal. Answers the question
+    /// "can this app work for me at all", which no amount of guessing can.
+    func coverage(days: Int = 90) async -> [String: Int] {
+        let calendar = Calendar.current
+        guard let start = calendar.date(byAdding: .day, value: -days, to: calendar.startOfDay(for: .now))
+        else { return [:] }
+
+        async let sleep = sleepDayCount(from: start)
+        async let resting = dayCount(.restingHeartRate, unit: .count().unitDivided(by: .minute()), from: start)
+        async let hrv = dayCount(.heartRateVariabilitySDNN, unit: .secondUnit(with: .milli), from: start)
+        async let steps = dayCount(.stepCount, unit: .count(), from: start, cumulative: true)
+        async let energy = dayCount(.activeEnergyBurned, unit: .kilocalorie(), from: start, cumulative: true)
+
+        return await ["Sleep": sleep, "Resting heart rate": resting,
+                      "Heart rate variability": hrv, "Steps": steps, "Active energy": energy]
+    }
+
+    private func sleepDayCount(from start: Date) async -> Int {
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: .now)
+        let descriptor = HKSampleQueryDescriptor(
+            predicates: [.categorySample(type: HKCategoryType(.sleepAnalysis), predicate: predicate)],
+            sortDescriptors: [SortDescriptor(\.startDate)]
+        )
+        guard let samples = try? await descriptor.result(for: store) else { return 0 }
+        let asleep = HKCategoryValueSleepAnalysis.allAsleepValues.map(\.rawValue)
+        let calendar = Calendar.current
+        let days = samples.filter { asleep.contains($0.value) }
+            .map { calendar.startOfDay(for: $0.endDate) }
+        return Set(days).count
+    }
+
+    private func dayCount(_ id: HKQuantityTypeIdentifier, unit: HKUnit, from start: Date,
+                          cumulative: Bool = false) async -> Int {
+        let calendar = Calendar.current
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: .now)
+        let descriptor = HKStatisticsCollectionQueryDescriptor(
+            predicate: .quantitySample(type: HKQuantityType(id), predicate: predicate),
+            options: cumulative ? .cumulativeSum : .discreteAverage,
+            anchorDate: calendar.startOfDay(for: start),
+            intervalComponents: DateComponents(day: 1)
+        )
+        guard let collection = try? await descriptor.result(for: store) else { return 0 }
+
+        var count = 0
+        collection.enumerateStatistics(from: start, to: .now) { statistics, _ in
+            let quantity = cumulative ? statistics.sumQuantity() : statistics.averageQuantity()
+            if let value = quantity?.doubleValue(for: unit), value > 0 { count += 1 }
+        }
+        return count
+    }
+
     // MARK: - History for the energy model
 
     /// One entry per day, most recent first, holding the signals the energy model compares
