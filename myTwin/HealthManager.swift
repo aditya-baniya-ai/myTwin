@@ -150,6 +150,21 @@ final class HealthManager {
 
     // MARK: - History for the energy model
 
+    /// Looks back further when nights are sparse. Most people do not wear a watch every
+    /// night, and Garmin only syncs forward from the day you connect it, so a fixed
+    /// two-week window often finds nothing at all.
+    func history(minimumNights: Int = 7) async -> (days: [DaySignals], searchedDays: Int) {
+        let spans = [60, 180, 365]
+        for span in spans {
+            let days = await dailyHistory(days: span)
+            let nights = days.dropFirst().filter { $0.asleepMinutes != nil }.count
+            if nights >= minimumNights || span == spans.last {
+                return (days, span)
+            }
+        }
+        return ([], spans.last ?? 365)
+    }
+
     /// One entry per day, most recent first, holding the signals the energy model compares
     /// against your own baseline. Sleep is counted from 6pm the evening before to noon.
     func dailyHistory(days: Int) async -> [DaySignals] {
@@ -165,6 +180,15 @@ final class HealthManager {
         let samples = (try? await descriptor.result(for: store)) ?? []
         let restingByDay = await restingHeartRateByDay(from: spanStart)
 
+        // Bucket every sample once, so looking back a year stays cheap. A night is filed
+        // under the morning it ends: shifting by six hours puts evening and small-hours
+        // sleep on the same day.
+        var byNight: [Date: [HKCategorySample]] = [:]
+        for sample in samples {
+            let night = calendar.startOfDay(for: sample.startDate.addingTimeInterval(6 * 3600))
+            byNight[night, default: []].append(sample)
+        }
+
         let asleepValues = HKCategoryValueSleepAnalysis.allAsleepValues.map(\.rawValue)
         let deepValue = HKCategoryValueSleepAnalysis.asleepDeep.rawValue
         let remValue = HKCategoryValueSleepAnalysis.asleepREM.rawValue
@@ -172,15 +196,11 @@ final class HealthManager {
         let inBedValue = HKCategoryValueSleepAnalysis.inBed.rawValue
 
         return (0..<days).compactMap { offset in
-            guard let day = calendar.date(byAdding: .day, value: -offset, to: today),
-                  let from = calendar.date(byAdding: .hour, value: -6, to: day),
-                  let until = calendar.date(byAdding: .hour, value: 12, to: day) else { return nil }
-
-            let night = samples.filter { $0.startDate >= from && $0.startDate < until }
+            guard let day = calendar.date(byAdding: .day, value: -offset, to: today) else { return nil }
             var signals = DaySignals(date: day)
             signals.restingHR = restingByDay[day]
-            guard !night.isEmpty else { return signals }
 
+            guard let night = byNight[day], !night.isEmpty else { return signals }
             let asleep = minutes(of: night.filter { asleepValues.contains($0.value) })
             let awake = minutes(of: night.filter { $0.value == awakeValue })
             let inBed = minutes(of: night.filter { $0.value == inBedValue })

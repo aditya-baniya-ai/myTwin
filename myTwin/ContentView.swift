@@ -12,6 +12,8 @@ struct ContentView: View {
     @State private var diary = EnergyDiary()
     @State private var todayFeatures: [String: Double]?
     @State private var coverage: [String: Int] = [:]
+    @State private var nightsFound = 0
+    @State private var searchedDays = 0
 
     private let energyModel = EnergyModel()
 
@@ -129,9 +131,15 @@ struct ContentView: View {
         } else if energyModel == nil {
             Text("Energy model unavailable.").foregroundStyle(.secondary)
         } else {
-            Text("myTwin needs about \(energyModel?.daysNeeded ?? 7) nights of sleep data before it can compare today with your normal.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(nightsFound == 0
+                     ? "No nights with sleep or heart data found\(searchedDays > 0 ? " in the last \(searchedDays) days" : "")."
+                     : "Found \(nightsFound) night\(nightsFound == 1 ? "" : "s") of data in the last \(searchedDays) days.")
+                    .font(.footnote)
+                Text("myTwin needs at least \(EnergyModel.minimumNights) to compare today with your normal.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 
@@ -168,7 +176,9 @@ struct ContentView: View {
 
     private func updateEnergy() async {
         guard health.isAuthorized, let energyModel else { return }
-        let history = await health.dailyHistory(days: 15)
+        let (history, searched) = await health.history()
+        searchedDays = searched
+        nightsFound = energyModel.usableNights(in: history).count
         todayFeatures = energyModel.features(from: history)
         energy = energyModel.reading(from: history, diary: diary)
         coverage = await health.coverage(days: 90)

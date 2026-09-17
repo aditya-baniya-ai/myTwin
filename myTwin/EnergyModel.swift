@@ -16,7 +16,7 @@ struct EnergyReading {
 
     let band: Band
     let deviation: Double        // in points of the user's own 1-5 rating scale
-    let daysOfHistory: Int
+    let daysOfHistory: Int      // nights with data, not calendar days
     let ratingsUsed: Int         // how many of the user's own ratings shaped this
 
     var headline: String {
@@ -30,7 +30,7 @@ struct EnergyReading {
     var explanation: String {
         ratingsUsed > 0
             ? "From your sleep, and learning from \(ratingsUsed) of your own ratings."
-            : "From your sleep, compared with your own last \(daysOfHistory) days."
+            : "From your sleep, compared with your own last \(daysOfHistory) nights."
     }
 }
 
@@ -56,6 +56,12 @@ struct EnergyModel {
         let intercept: Double
         let weights: [String: Double]
         let bands: Bands
+        let featureStats: [String: Stat]
+    }
+
+    private struct Stat: Decodable {
+        let mean: Double
+        let std: Double
     }
 
     private struct Bands: Decodable {
@@ -84,12 +90,25 @@ struct EnergyModel {
 
     var daysNeeded: Int { file.minHistoryDays }
 
+    /// Nights that actually hold data, newest first. Counting calendar days instead would
+    /// call a year of empty days "history" and then fail to compare anything.
+    func usableNights(in history: [DaySignals]) -> [DaySignals] {
+        history.dropFirst()
+            .filter { $0.asleepMinutes != nil || $0.restingHR != nil }
+            .prefix(maximumNights)
+            .map { $0 }
+    }
+
+    /// Enough nights to judge what is normal for someone.
+    static let minimumNights = 3
+    private var maximumNights: Int { max(file.baselineWindowDays, 30) }
+
     /// Today's features, or nil when there is not enough history to compare against.
     /// `history` is most recent first; the first entry is today.
     func features(from history: [DaySignals]) -> [String: Double]? {
         guard let today = history.first else { return nil }
-        let baseline = Array(history.dropFirst().prefix(file.baselineWindowDays))
-        guard baseline.count >= file.minHistoryDays else { return nil }
+        let baseline = usableNights(in: history)
+        guard baseline.count >= Self.minimumNights else { return nil }
 
         var values: [String: Double] = [:]
         for name in featureOrder {
@@ -102,7 +121,7 @@ struct EnergyModel {
 
     func reading(from history: [DaySignals], diary: EnergyDiary? = nil) -> EnergyReading? {
         guard let values = features(from: history) else { return nil }
-        let daysOfHistory = min(history.count - 1, file.baselineWindowDays)
+        let daysOfHistory = usableNights(in: history).count
 
         // The shipped model, converted to the scale the user rates on.
         let scale = Self.userScaleRange / Self.trainedScaleRange
@@ -138,10 +157,14 @@ struct EnergyModel {
                              daysOfHistory: daysOfHistory, ratingsUsed: ratingsUsed)
     }
 
+    /// Missing signals fall back to the average seen in training. Skipping them instead
+    /// leaves the intercept uncounterweighted, which pushed every day to "below normal"
+    /// for anyone without full sleep data.
     private func score(_ values: [String: Double], intercept: Double, weights: [String: Double]) -> Double {
         var total = intercept
         for (name, weight) in weights {
-            if let value = values[name] { total += weight * value }
+            let value = values[name] ?? target.featureStats[name]?.mean ?? 0
+            total += weight * value
         }
         return total
     }
