@@ -60,6 +60,8 @@ final class VoiceManager {
     private var lastHeard = Date.now
     private var lastSpoken = ""
     private var isSpeakingNow = false
+    // The recogniser delivers speech in pieces; the wake phrase can straddle two of them.
+    private var recentSpeech: [String] = []
     // Where the last sent sentence ended in the audio. Results before this are already
     // spoken for: without this the recogniser re-delivers them and the app hears you twice.
     private var sentUpTo = CMTime.zero
@@ -137,6 +139,7 @@ final class VoiceManager {
 
         transcript = ""
         finalText = ""
+        recentSpeech = []
         if status == .listening || status == .preparing { status = .idle }
     }
 
@@ -254,10 +257,12 @@ final class VoiceManager {
                     if isAwake {
                         transcript = heard
                         lastHeard = .now
-                    } else if let command = commandAfterWakePhrase(in: heard) {
+                    } else if let command = commandAfterWakePhrase(in: (recentSpeech + [heard]).joined(separator: " ")) {
                         wakeUp(with: command)
                     } else if result.isFinal {
-                        // Not addressed to the app: forget it and keep waiting.
+                        // The recogniser often splits "my twin" across two results, so keep the
+                        // last couple of them: clearing immediately meant the phrase never matched.
+                        recentSpeech = (recentSpeech + [text]).suffix(2).map { $0 }
                         finalText = ""
                         transcript = ""
                         sentUpTo = latestResultEnd
@@ -271,6 +276,7 @@ final class VoiceManager {
 
     private func wakeUp(with command: String) {
         isAwake = true
+        recentSpeech = []
         finalText = command
         transcript = command
         lastHeard = .now
