@@ -8,6 +8,7 @@ struct DaySignals {
     var deepMinutes: Double?
     var remMinutes: Double?
     var restingHR: Double?
+    var bedHour: Double?         // when sleep started, as a fractional hour
 }
 
 /// How today compares with this person's own recent normal.

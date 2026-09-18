@@ -205,6 +205,11 @@ final class HealthManager {
             let awake = minutes(of: night.filter { $0.value == awakeValue })
             let inBed = minutes(of: night.filter { $0.value == inBedValue })
 
+            if let firstAsleep = night.filter({ asleepValues.contains($0.value) })
+                .min(by: { $0.startDate < $1.startDate }) {
+                let parts = calendar.dateComponents([.hour, .minute], from: firstAsleep.startDate)
+                signals.bedHour = Double(parts.hour ?? 23) + Double(parts.minute ?? 0) / 60
+            }
             signals.asleepMinutes = asleep > 0 ? asleep : nil
             signals.deepMinutes = minutes(of: night.filter { $0.value == deepValue })
             signals.remMinutes = minutes(of: night.filter { $0.value == remValue })
@@ -214,6 +219,20 @@ final class HealthManager {
             if asleep > 0, denominator > 0 { signals.efficiency = 100 * asleep / denominator }
             return signals
         }
+    }
+
+    /// When this person usually falls asleep, from their own nights. Falls back to 11pm.
+    /// Returned as (hour, minute) so a reminder can be scheduled against it.
+    func typicalBedtime(from history: [DaySignals]) -> (hour: Int, minute: Int) {
+        let hours = history.compactMap(\.bedHour)
+            // Past midnight reads as 0-3, which would drag the average back to morning.
+            .map { $0 < 12 ? $0 + 24 : $0 }
+            .sorted()
+        guard !hours.isEmpty else { return (23, 0) }
+
+        let middle = hours[hours.count / 2]
+        let wrapped = middle >= 24 ? middle - 24 : middle
+        return (Int(wrapped), Int((wrapped - wrapped.rounded(.down)) * 60))
     }
 
     /// Overlapping samples are merged, because the watch and phone can both record a night.

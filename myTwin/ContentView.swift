@@ -9,6 +9,7 @@ struct ContentView: View {
     @State private var voice = VoiceManager()
     @State private var diary = EnergyDiary()
     @State private var avatar = AvatarChoice()
+    @State private var notifications = NotificationManager()
 
     @State private var showChat = false
     @State private var showPicker = false
@@ -73,6 +74,8 @@ struct ContentView: View {
                         }
                     }
                 }
+
+                Section("Reminders") { remindersRows }
 
                 if health.isAuthorized {
                     Section("What myTwin can read") {
@@ -150,6 +153,31 @@ struct ContentView: View {
         }
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
+    }
+
+    /// Each reminder says why it is worth following, not just what to do.
+    @ViewBuilder private var remindersRows: some View {
+        ForEach(NotificationManager.Kind.allCases) { kind in
+            Toggle(isOn: Binding(get: { notifications.isOn(kind) },
+                                 set: { _ in Task { await notifications.toggle(kind) } })) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(kind.title)
+                    Text(kind.explanation)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .tint(BrandTitle.brand[1])
+        }
+        if notifications.permissionDenied {
+            Text("Notifications are turned off for myTwin. Turn them on in Settings.")
+                .font(.caption)
+                .foregroundStyle(.red)
+        } else if notifications.isOn(.bedtime) || notifications.isOn(.caffeine) {
+            Text("Timed against your usual bedtime of \(notifications.bedtimeText).")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
     }
 
     /// Right now, as a fraction: the prediction sets the start, the clock drains it.
@@ -257,6 +285,7 @@ struct ContentView: View {
             energy = energyModel.reading(from: history, diary: diary)
         }
         coverage = await health.coverage(days: 90)
+        await notifications.reschedule(bedtime: health.typicalBedtime(from: history))
     }
 }
 
