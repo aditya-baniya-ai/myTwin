@@ -43,11 +43,15 @@ struct AvatarView: View {
     var style: AvatarStyle = .all[0]
     var size: CGFloat = 150
     var showsBatteryRing = true
+    /// Off for the Home Screen widget, which is drawn once and never animates: waiting
+    /// for the entrance animation there would capture the twin while it is still invisible.
+    var animates = true
 
     @State private var appeared = false
     @State private var breathing = false
 
     private var level: Double { min(max(charge, 0), 1) }
+    private var shown: Bool { appeared || !animates }
 
     private var mood: [Color] {
         switch level {
@@ -68,7 +72,7 @@ struct AvatarView: View {
             if showsBatteryRing {
                 Circle().stroke(mood[0].opacity(0.14), lineWidth: size * 0.042)
                 Circle()
-                    .trim(from: 0, to: appeared ? level : 0)
+                    .trim(from: 0, to: shown ? level : 0)
                     .stroke(AngularGradient(colors: mood + [mood[0]], center: .center),
                             style: StrokeStyle(lineWidth: size * 0.042, lineCap: .round))
                     .rotationEffect(.degrees(-90))
@@ -82,10 +86,11 @@ struct AvatarView: View {
                 .offset(y: breathing ? -size * 0.012 : 0)
         }
         .frame(width: size, height: size)
-        .scaleEffect(appeared ? 1 : 0.85)
-        .opacity(appeared ? 1 : 0)
+        .scaleEffect(shown ? 1 : 0.85)
+        .opacity(shown ? 1 : 0)
         .animation(.spring(response: 0.9, dampingFraction: 0.72), value: level)
         .onAppear {
+            guard animates else { return }
             withAnimation(.spring(response: 0.8, dampingFraction: 0.65)) { appeared = true }
             withAnimation(.easeInOut(duration: 3).repeatForever(autoreverses: true)) { breathing = true }
         }

@@ -6,9 +6,40 @@
 	objectVersion = 90;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		000000000000000000000300 /* AvatarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000200 /* AvatarView.swift */; };
+		000000000000000000000301 /* DayCharge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000201 /* DayCharge.swift */; };
+		000000000000000000000302 /* energy_model.json in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000202 /* energy_model.json */; };
+		000000000000000000000303 /* AvatarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000200 /* AvatarView.swift */; };
+		000000000000000000000304 /* DayCharge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000201 /* DayCharge.swift */; };
+		000000000000000000000305 /* MyTwinWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000203 /* MyTwinWidget.swift */; };
+		000000000000000000000306 /* energy_model.json in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000202 /* energy_model.json */; };
+		000000000000000000000307 /* myTwinWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 000000000000000000000130 /* myTwinWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		000000000000000000000120 /* myTwin.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = myTwin.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		000000000000000000000130 /* myTwinWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = myTwinWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		000000000000000000000200 /* AvatarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarView.swift; sourceTree = "<group>"; };
+		000000000000000000000201 /* DayCharge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayCharge.swift; sourceTree = "<group>"; };
+		000000000000000000000202 /* energy_model.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = energy_model.json; sourceTree = "<group>"; };
+		000000000000000000000203 /* MyTwinWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyTwinWidget.swift; sourceTree = "<group>"; };
+		000000000000000000000204 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		000000000000000150000000 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				000000000000000000000307 /* myTwinWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		000000000000000000000010 /* myTwin */ = {
@@ -24,6 +55,11 @@
 			files = (
 			);
 		};
+		000000000000000230000000 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -31,6 +67,8 @@
 			isa = PBXGroup;
 			children = (
 				000000000000000000000010 /* myTwin */,
+				000000000000000000000011 /* Shared */,
+				000000000000000000000012 /* myTwinWidget */,
 				000000000000000000000020 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -39,8 +77,28 @@
 			isa = PBXGroup;
 			children = (
 				000000000000000000000120 /* myTwin.app */,
+				000000000000000000000130 /* myTwinWidgetExtension.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		000000000000000000000011 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				000000000000000000000200 /* AvatarView.swift */,
+				000000000000000000000201 /* DayCharge.swift */,
+				000000000000000000000202 /* energy_model.json */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		000000000000000000000012 /* myTwinWidget */ = {
+			isa = PBXGroup;
+			children = (
+				000000000000000000000203 /* MyTwinWidget.swift */,
+				000000000000000000000204 /* Info.plist */,
+			);
+			path = myTwinWidget;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -53,8 +111,12 @@
 				000000000000000120000000 /* Sources */,
 				000000000000000130000000 /* Frameworks */,
 				000000000000000140000000 /* Resources */,
+				000000000000000150000000 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
+			);
+			dependencies = (
+				000000000000000300000000 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				000000000000000000000010 /* myTwin */,
@@ -64,7 +126,34 @@
 			productReference = 000000000000000000000120 /* myTwin.app */;
 			productType = "com.apple.product-type.application";
 		};
+		000000000000000200000000 /* myTwinWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 000000000000000210000000 /* Build configuration list for PBXNativeTarget "myTwinWidgetExtension" */;
+			buildPhases = (
+				000000000000000220000000 /* Sources */,
+				000000000000000230000000 /* Frameworks */,
+				000000000000000240000000 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = myTwinWidgetExtension;
+			productName = myTwinWidgetExtension;
+			productReference = 000000000000000000000130 /* myTwinWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
+
+/* Begin PBXContainerItemProxy section */
+		000000000000000310000000 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 000000000000000000000000 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 000000000000000200000000;
+			remoteInfo = myTwinWidgetExtension;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXProject section */
 		000000000000000000000000 /* Project object */ = {
@@ -75,6 +164,9 @@
 				LastUpgradeCheck = 2700;
 				TargetAttributes = {
 					000000000000000100000000 = {
+						CreatedOnToolsVersion = 26.3;
+					};
+					000000000000000200000000 = {
 						CreatedOnToolsVersion = 26.3;
 					};
 				};
@@ -94,14 +186,30 @@
 			projectRoot = "";
 			targets = (
 				000000000000000100000000 /* myTwin */,
+				000000000000000200000000 /* myTwinWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXTargetDependency section */
+		000000000000000300000000 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 000000000000000200000000 /* myTwinWidgetExtension */;
+			targetProxy = 000000000000000310000000 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXResourcesBuildPhase section */
 		000000000000000140000000 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			files = (
+				000000000000000000000302 /* energy_model.json in Resources */,
+			);
+		};
+		000000000000000240000000 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+				000000000000000000000306 /* energy_model.json in Resources */,
 			);
 		};
 /* End PBXResourcesBuildPhase section */
@@ -110,6 +218,16 @@
 		000000000000000120000000 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			files = (
+				000000000000000000000300 /* AvatarView.swift in Sources */,
+				000000000000000000000301 /* DayCharge.swift in Sources */,
+			);
+		};
+		000000000000000220000000 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+				000000000000000000000303 /* AvatarView.swift in Sources */,
+				000000000000000000000304 /* DayCharge.swift in Sources */,
+				000000000000000000000305 /* MyTwinWidget.swift in Sources */,
 			);
 		};
 /* End PBXSourcesBuildPhase section */
@@ -331,6 +449,68 @@
 			};
 			name = Release;
 		};
+		000000000000000211000000 /* Debug configuration for PBXNativeTarget "myTwinWidgetExtension" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = L2N7935YGL;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = myTwinWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Your twin";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.aadityabaniyapersonalteam.myTwin.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		000000000000000212000000 /* Release configuration for PBXNativeTarget "myTwinWidgetExtension" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = L2N7935YGL;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = myTwinWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Your twin";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.aadityabaniyapersonalteam.myTwin.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -347,6 +527,14 @@
 			buildConfigurations = (
 				000000000000000111000000 /* Debug configuration for PBXNativeTarget "myTwin" */,
 				000000000000000112000000 /* Release configuration for PBXNativeTarget "myTwin" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		000000000000000210000000 /* Build configuration list for PBXNativeTarget "myTwinWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				000000000000000211000000 /* Debug configuration for PBXNativeTarget "myTwinWidgetExtension" */,
+				000000000000000212000000 /* Release configuration for PBXNativeTarget "myTwinWidgetExtension" */,
 			);
 			defaultConfigurationName = Release;
 		};

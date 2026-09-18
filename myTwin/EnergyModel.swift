@@ -51,7 +51,6 @@ struct EnergyModel {
         let baselineWindowDays: Int
         let minHistoryDays: Int
         let targets: [String: Target]
-        let hourlyCharge: [Double]?      // how energy falls through a day, measured
     }
 
     private struct Target: Decodable {
@@ -95,17 +94,14 @@ struct EnergyModel {
     /// How much energy is left right now, 0 to 1. The morning prediction sets where the
     /// day starts; the hourly curve, measured from thousands of real check-ins, drains it.
     func charge(for reading: EnergyReading?, at date: Date = .now) -> Double {
-        let hour = Calendar.current.component(.hour, from: date)
-        let curve = file.hourlyCharge.flatMap { $0.indices.contains(hour) ? $0[hour] : nil } ?? 0.75
-
         let start: Double
         switch reading?.band {
         case .above: start = 1.0
         case .normal: start = 0.88
         case .below: start = 0.68
-        case nil: start = 0.85          // unknown day: neither cheerful nor gloomy
+        case nil: start = DayCharge.unknownDay
         }
-        return min(max(start * curve, 0), 1)
+        return DayCharge.remaining(from: start, at: date)
     }
 
     /// Nights that actually hold data, newest first. Counting calendar days instead would
