@@ -8,11 +8,13 @@ struct ContentView: View {
     @State private var chat: ChatManager
     @State private var voice = VoiceManager()
     @State private var diary = EnergyDiary()
-    @State private var avatar = AvatarChoice()
+    @State private var avatars = AvatarManager.shared
     @State private var notifications = NotificationManager()
 
     @State private var showChat = false
     @State private var showPicker = false
+    /// The visible height of the screen, so the twin can take up most of it.
+    @State private var screenHeight: CGFloat = 0
     @State private var energy: EnergyReading?
     @State private var todayFeatures: [String: Double]?
     @State private var coverage: [String: Int] = [:]
@@ -36,6 +38,8 @@ struct ContentView: View {
             List {
                 header
 
+                // See-through cards, so the body-battery glow shows behind them too.
+                Group {
                 if health.isAuthorized, !week.isEmpty {
                     Section("Your last 7 days") { WeekStrip(days: week) }
                 }
@@ -85,7 +89,12 @@ struct ContentView: View {
                 if let error = health.errorMessage {
                     Text(error).foregroundStyle(.red)
                 }
+                }
+                .listRowBackground(Color(.secondarySystemGroupedBackground).opacity(0.72))
             }
+            .scrollContentBackground(.hidden)
+            .background { BatteryBackdrop(energy: charge * 100) }
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { screenHeight = $0 }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 Button("Ask myTwin", systemImage: "bubble.left.and.text.bubble.right") {
@@ -96,7 +105,7 @@ struct ContentView: View {
                 ChatView(chat: chat, voice: voice)
             }
             .sheet(isPresented: $showPicker) {
-                AvatarPicker(choice: avatar, charge: charge)
+                AvatarPicker(avatars: avatars, energy: charge * 100)
             }
             .safeAreaInset(edge: .bottom) { voiceBar }
             .task {
@@ -134,7 +143,10 @@ struct ContentView: View {
         Section {
             VStack(spacing: 10) {
                 BrandTitle()
-                AvatarView(charge: charge, style: avatar.style)
+                // A still while the picker is open: its preview is then the one live scene.
+                Avatar3DView(character: avatars.selected, energy: charge * 100,
+                             isLive: !showPicker || Avatar3DView.drawsOnlyFirstScene)
+                    .frame(height: max(screenHeight * 0.7, 320))
                     .onTapGesture {
                         UIImpactFeedbackGenerator(style: .soft).impactOccurred()
                         showChat = true
@@ -147,12 +159,14 @@ struct ContentView: View {
                     .buttonStyle(.plain)
                     .foregroundStyle(BrandTitle.brand[1])
                 verdict
+                    .padding(.horizontal, 20)
             }
             .frame(maxWidth: .infinity)
-            .padding(.top, 4)
+            .padding(.top, 44)      // room for the title's glow inside the row
         }
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets())      // full width, so the glow isn't cut off at the sides
     }
 
     /// Each reminder says why it is worth following, not just what to do.

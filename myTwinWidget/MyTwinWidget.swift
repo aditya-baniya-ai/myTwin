@@ -1,17 +1,15 @@
-import AppIntents
 import SwiftUI
 import WidgetKit
 
-/// The twin on the Home Screen: the same character, fading as the day wears on.
+/// The twin on the Home Screen, fading as the day wears on.
 ///
-/// The widget cannot read the app's health data or the character you picked - that needs
-/// a paid developer account's shared container - so it draws the day's measured drain and
-/// lets you choose the character in its own settings (long-press the widget, Edit Widget).
+/// A widget cannot run a live 3D scene, so it shows the character's rendered still for
+/// the energy state the clock implies. It cannot see your health data either - sharing
+/// the app's data needs a paid developer account - so it draws the day's measured drain
+/// from an average start.
 struct MyTwinWidget: Widget {
     var body: some WidgetConfiguration {
-        AppIntentConfiguration(kind: "MyTwinWidget",
-                               intent: CharacterIntent.self,
-                               provider: Provider()) { entry in
+        StaticConfiguration(kind: "MyTwinWidget", provider: Provider()) { entry in
             WidgetView(entry: entry)
                 .containerBackground(.fill.tertiary, for: .widget)
         }
@@ -21,77 +19,48 @@ struct MyTwinWidget: Widget {
     }
 }
 
-// MARK: - Which character to draw
-
-enum WidgetCharacter: String, AppEnum, CaseIterable {
-    case dash, nova, pip, kai, sol, wren
-
-    static var typeDisplayRepresentation: TypeDisplayRepresentation { "Character" }
-
-    /// Spelled out because the AppEnum macro needs a literal. Keep in step with AvatarStyle.all.
-    static var caseDisplayRepresentations: [WidgetCharacter: DisplayRepresentation] = [
-        .dash: "Dash", .nova: "Nova", .pip: "Pip", .kai: "Kai", .sol: "Sol", .wren: "Wren",
-    ]
-
-    var style: AvatarStyle { AvatarStyle.named(rawValue) }
-}
-
-struct CharacterIntent: WidgetConfigurationIntent {
-    static var title: LocalizedStringResource { "Choose your twin" }
-
-    @Parameter(title: "Character", default: .dash)
-    var character: WidgetCharacter
-}
-
-// MARK: - What to show, and when
-
 struct Entry: TimelineEntry {
     let date: Date
-    let charge: Double
-    let style: AvatarStyle
+    let energy: Double          // 0-100
 }
 
-struct Provider: AppIntentTimelineProvider {
+struct Provider: TimelineProvider {
     func placeholder(in context: Context) -> Entry {
-        entry(at: .now, character: .dash)
+        entry(at: .now)
     }
 
-    func snapshot(for configuration: CharacterIntent, in context: Context) async -> Entry {
-        entry(at: .now, character: configuration.character)
+    func getSnapshot(in context: Context, completion: @escaping (Entry) -> Void) {
+        completion(entry(at: .now))
     }
 
     /// One entry on each of the next twelve hours, because the curve only moves hourly.
-    func timeline(for configuration: CharacterIntent, in context: Context) async -> Timeline<Entry> {
+    func getTimeline(in context: Context, completion: @escaping (Timeline<Entry>) -> Void) {
         var dates = [Date.now]
         let calendar = Calendar.current
         if let nextHour = calendar.nextDate(after: .now, matching: DateComponents(minute: 0),
                                             matchingPolicy: .nextTime) {
             dates += (0..<12).compactMap { calendar.date(byAdding: .hour, value: $0, to: nextHour) }
         }
-        return Timeline(entries: dates.map { entry(at: $0, character: configuration.character) },
-                        policy: .atEnd)
+        completion(Timeline(entries: dates.map(entry), policy: .atEnd))
     }
 
-    private func entry(at date: Date, character: WidgetCharacter) -> Entry {
-        Entry(date: date,
-              charge: DayCharge.remaining(from: DayCharge.unknownDay, at: date),
-              style: character.style)
+    private func entry(at date: Date) -> Entry {
+        Entry(date: date, energy: DayCharge.remaining(from: DayCharge.unknownDay, at: date) * 100)
     }
 }
-
-// MARK: - The face of it
 
 struct WidgetView: View {
     let entry: Entry
     @Environment(\.widgetFamily) private var family
 
-    private var percent: String { "\(Int(entry.charge * 100))%" }
+    private var state: AvatarEnergyState { AvatarEnergyState(score: entry.energy) }
+    private var percent: String { "\(Int(entry.energy))%" }
 
     var body: some View {
         switch family {
         case .systemMedium:
-            HStack(spacing: 18) {
-                avatar(size: 108)
+            HStack(spacing: 16) {
+                twin
                 VStack(alignment: .leading, spacing: 4) {
                     Text(percent)
                         .font(.system(size: 40, weight: .bold, design: .rounded))
@@ -107,7 +76,7 @@ struct WidgetView: View {
             }
         default:
             VStack(spacing: 2) {
-                avatar(size: 96)
+                twin
                 Text("\(percent) charged")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
@@ -115,15 +84,18 @@ struct WidgetView: View {
         }
     }
 
-    private func avatar(size: CGFloat) -> some View {
-        AvatarView(charge: entry.charge, style: entry.style, size: size, animates: false)
+    private var twin: some View {
+        Image(AvatarCharacter.dash.stillName(for: state))
+            .resizable()
+            .scaledToFit()
     }
 
     private var advice: String {
-        switch entry.charge {
-        case 0.66...: "Good window for the hard thing."
-        case 0.4..<0.66: "Past your peak. Save the easy jobs for later."
-        default: "Running low. Wind down rather than push."
+        switch state {
+        case .energetic: "Good window for the hard thing."
+        case .normal: "Steady. Keep the big tasks moving."
+        case .tired: "Past your peak. Save the easy jobs for later."
+        case .exhausted: "Running low. Wind down rather than push."
         }
     }
 }
