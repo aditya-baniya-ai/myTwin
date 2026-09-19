@@ -18,6 +18,9 @@ enum AvatarEnergyState: String, CaseIterable {
     /// The looping idle clip that acts out this state: idle_energetic, idle_normal, ...
     var clipName: String { "idle_\(rawValue)" }
 
+    /// Dash's rendered still for this state, in Shared/AvatarImages.xcassets.
+    var stillName: String { "Dash_\(rawValue)" }
+
     /// One-shot actions played now and then on top of the idle loop.
     var actions: [String] {
         switch self {

@@ -11,6 +11,13 @@ struct HealthSnapshot {
     var activeEnergyKcal: Double?  // today so far
 }
 
+/// One weigh-in from Apple Health.
+struct WeightSample: Identifiable {
+    let date: Date
+    let pounds: Double
+    var id: Date { date }
+}
+
 @MainActor
 @Observable
 final class HealthManager {
@@ -20,7 +27,7 @@ final class HealthManager {
     var snapshot = HealthSnapshot()
     var errorMessage: String?
 
-    private let readTypes: Set<HKObjectType> = [
+    private let coreTypes: Set<HKObjectType> = [
         HKQuantityType(.heartRateVariabilitySDNN),
         HKQuantityType(.restingHeartRate),
         HKQuantityType(.respiratoryRate),
@@ -28,6 +35,8 @@ final class HealthManager {
         HKQuantityType(.activeEnergyBurned),
         HKCategoryType(.sleepAnalysis),
     ]
+    /// Added after launch. Kept apart so people who already connected are asked only about it.
+    private var readTypes: Set<HKObjectType> { coreTypes.union([HKQuantityType(.bodyMass)]) }
 
     func requestAuthorization() async {
         guard HKHealthStore.isHealthDataAvailable() else {
@@ -49,10 +58,26 @@ final class HealthManager {
     /// already asked. Without this the app would show "Connect Apple Health" again on every launch.
     func refreshAuthorizationState() async {
         guard HKHealthStore.isHealthDataAvailable() else { return }
-        let status = try? await store.statusForAuthorizationRequest(toShare: [], read: readTypes)
-        guard status == .unnecessary else { return }
+        let core = try? await store.statusForAuthorizationRequest(toShare: [], read: coreTypes)
+        guard core == .unnecessary else { return }      // never connected: wait for the button
+        if (try? await store.statusForAuthorizationRequest(toShare: [], read: readTypes)) == .shouldRequest {
+            // Something new to read since you connected (weight): iOS asks only about that.
+            try? await store.requestAuthorization(toShare: [], read: readTypes)
+        }
         isAuthorized = true
         await refresh()
+    }
+
+    /// Weigh-ins from the last `days` days, oldest first, in pounds.
+    func weights(days: Int = 90) async -> [WeightSample] {
+        let start = Calendar.current.date(byAdding: .day, value: -days, to: .now) ?? .now
+        let descriptor = HKSampleQueryDescriptor(
+            predicates: [.quantitySample(type: HKQuantityType(.bodyMass),
+                                         predicate: HKQuery.predicateForSamples(withStart: start, end: .now))],
+            sortDescriptors: [SortDescriptor(\.startDate)]
+        )
+        let samples = (try? await descriptor.result(for: store)) ?? []
+        return samples.map { WeightSample(date: $0.startDate, pounds: $0.quantity.doubleValue(for: .pound())) }
     }
 
     /// Today's health numbers as plain text, for the chatbot to read.

@@ -11,6 +11,8 @@ struct ChatView: View {
             switch SystemLanguageModel.default.availability {
             case .available:
                 conversation
+            case .unavailable where chat.gemini.isActive:
+                conversation                    // Gemini can answer while online
             case .unavailable(let reason):
                 ContentUnavailableView("Chat isn't available", systemImage: "sparkles",
                                        description: Text(explanation(for: reason)))
@@ -39,12 +41,20 @@ struct ChatView: View {
                             .padding(.top, 40)
                     }
                     ForEach(chat.messages) { message in
-                        Text(message.text)
-                            .padding(12)
-                            .foregroundStyle(message.isUser ? Color.white : Color.primary)
-                            .background(message.isUser ? Color.accentColor : Color(.secondarySystemBackground),
-                                        in: .rect(cornerRadius: 16))
-                            .frame(maxWidth: .infinity, alignment: message.isUser ? .trailing : .leading)
+                        VStack(alignment: message.isUser ? .trailing : .leading, spacing: 4) {
+                            Text(message.text)
+                                .padding(12)
+                                .foregroundStyle(message.isUser ? Color.white : Color.primary)
+                                .background(message.isUser ? Color.accentColor : Color(.secondarySystemBackground),
+                                            in: .rect(cornerRadius: 16))
+                            if !message.isUser {    // which one answered
+                                Label(message.byGemini ? "Gemini" : "On this iPhone",
+                                      systemImage: message.byGemini ? "sparkles" : "iphone")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: message.isUser ? .trailing : .leading)
                     }
                     if let change = chat.calendar.pendingChange {
                         VStack(alignment: .leading, spacing: 12) {

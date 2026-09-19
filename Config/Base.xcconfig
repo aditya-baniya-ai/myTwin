@@ -1,0 +1,5 @@
+// Build settings for the myTwin app target.
+//
+// The Gemini API key lives in Secrets.xcconfig next to this file. That file is never
+// committed (see .gitignore); without it the app builds fine and simply never uses Gemini.
+#include? "Secrets.xcconfig"

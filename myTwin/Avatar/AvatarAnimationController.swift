@@ -44,16 +44,6 @@ final class AvatarAnimationController {
         return turntable
     }
 
-    /// Lets go of the scene when its view leaves the screen, so RealityKit can free it
-    /// and the per-frame callback stops costing battery.
-    func stop() {
-        frameUpdates?.cancel()
-        frameUpdates = nil
-        turntable.removeFromParent()
-        avatar = nil
-        state = nil
-    }
-
     /// Blends into the idle loop for `newState`. Does nothing if it is already playing.
     func show(_ newState: AvatarEnergyState) {
         guard newState != state, let avatar, let idle = avatar.clips[newState.clipName] else { return }

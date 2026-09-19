@@ -4,7 +4,9 @@ import FoundationModels
 struct ChatMessage: Identifiable {
     let id = UUID()
     let isUser: Bool
-    let text: String
+    var text: String
+    /// Gemini answered, and speaks for itself: the iPhone voice stays quiet.
+    var byGemini = false
 }
 
 @MainActor
@@ -13,11 +15,15 @@ final class ChatManager {
     var messages: [ChatMessage] = []
     var isResponding = false
     let calendar: CalendarManager
+    let gemini: GeminiAccess
 
     private let session: LanguageModelSession
+    private let geminiChat: GeminiChat
 
-    init(calendar: CalendarManager, health: HealthManager) {
+    init(calendar: CalendarManager, health: HealthManager, gemini: GeminiAccess, voice: VoiceManager) {
         self.calendar = calendar
+        self.gemini = gemini
+        geminiChat = GeminiChat(access: gemini, voice: voice, calendar: calendar, health: health)
         // Wording tested against Apple's safety filter: giving the assistant a name plus the date
         // got calendar questions blocked, and without the rules about saving the model claimed it
         // had changed events.
@@ -40,11 +46,15 @@ final class ChatManager {
         )
     }
 
+    /// Gemini answers when you've allowed it and you're online; otherwise, or if it can't be
+    /// reached, the model on the iPhone does.
     func send(_ text: String) async {
         messages.append(ChatMessage(isUser: true, text: text))
         calendar.pendingChange = nil  // a new message replaces any unconfirmed suggestion
         isResponding = true
         defer { isResponding = false }
+
+        if gemini.isActive, await answerWithGemini(text) { return }
 
         let reply: String
         do {
@@ -63,6 +73,27 @@ final class ChatManager {
         } else {
             messages.append(ChatMessage(isUser: false, text: reply))
         }
+    }
+
+    /// Streams Gemini's words into one message as they arrive.
+    private func answerWithGemini(_ text: String) async -> Bool {
+        var index: Int?
+        return await geminiChat.answer(text) { [weak self] words in
+            guard let self else { return }
+            if let index {
+                messages[index].text += words
+            } else {
+                // Only the leading space goes: the trailing one separates the next piece.
+                messages.append(ChatMessage(isUser: false, text: String(words.drop(while: \.isWhitespace)),
+                                            byGemini: true))
+                index = messages.count - 1
+            }
+        }
+    }
+
+    /// Drops the connection to Gemini, for example when the app goes to the background.
+    func endGemini() {
+        geminiChat.close()
     }
 
     func confirmChange() {

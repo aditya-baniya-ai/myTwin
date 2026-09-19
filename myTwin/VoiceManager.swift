@@ -4,7 +4,8 @@ import CoreMedia
 import Speech
 
 /// Live voice: listens for the wake phrase "my twin", then takes spoken instructions,
-/// speaks answers, and lets you talk over it.
+/// speaks answers (in the iPhone's voice, or Gemini's when it answers), and lets you talk
+/// over it.
 ///
 /// The microphone stays on while the app talks, so it also hears the app's own voice.
 /// Echo cancellation removes most of it and `echoOverlap` throws away the rest.
@@ -50,6 +51,13 @@ final class VoiceManager {
     private let locale = Locale.current
     private let engine = AVAudioEngine()
     private let synthesizer = AVSpeechSynthesizer()
+    // Gemini's voice arrives as 24 kHz, 16-bit mono PCM and plays through the same engine as
+    // the microphone, so echo cancellation can take it back out of what the microphone hears.
+    private let player = AVAudioPlayerNode()
+    private let geminiFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 24_000,
+                                             channels: 1, interleaved: false)!
+    private var queuedSpeech = 0         // pieces of Gemini's voice waiting to play
+    private var speechCut = false        // you talked over Gemini: skip the rest of that answer
     private var analyzer: SpeechAnalyzer?
     private var inputStream: AsyncStream<AnalyzerInput>.Continuation?
     private var resultsTask: Task<Void, Never>?
@@ -173,12 +181,74 @@ final class VoiceManager {
         speechEndTask = nil
         isSpeakingNow = false
         if synthesizer.isSpeaking { synthesizer.stopSpeaking(at: .immediate) }
+        if player.isPlaying {
+            player.stop()
+            speechCut = true
+        }
+    }
+
+    // MARK: - Gemini's voice
+
+    /// Call as each Gemini answer starts, so it plays even if you cut off the last one.
+    func startGeminiAnswer() {
+        speechCut = false
+        lastSpoken = ""
+    }
+
+    /// Plays the next piece of Gemini's voice as it streams in.
+    func play(geminiSpeech pcm: Data) {
+        guard speaksAnswers, !speechCut, let buffer = floatBuffer(fromPCM16: pcm) else { return }
+        do { try startPlayer() } catch { return }
+        queuedSpeech += 1
+        isSpeakingNow = true
+        // The manager lives as long as the app, so holding it until the piece plays is fine.
+        player.scheduleBuffer(buffer) { Task { @MainActor in self.queuedSpeech -= 1 } }
+        if speechEndTask == nil { watchForSpeechEnd() }
+    }
+
+    /// The words Gemini is saying, so its voice coming back through the microphone isn't
+    /// taken for yours.
+    func addGeminiWords(_ words: String) {
+        lastSpoken += words
+    }
+
+    private func startPlayer() throws {
+        attachPlayer()
+        if !engine.isRunning {
+            // Not listening: play through the speaker and leave the microphone off.
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
+            try session.setActive(true)
+            try engine.start()
+        }
+        if !player.isPlaying { player.play() }
+    }
+
+    private func attachPlayer() {
+        guard player.engine == nil else { return }
+        engine.attach(player)
+        engine.connect(player, to: engine.mainMixerNode, format: geminiFormat)
+    }
+
+    /// 16-bit samples as they arrive from Gemini, to the float samples the engine plays.
+    private func floatBuffer(fromPCM16 pcm: Data) -> AVAudioPCMBuffer? {
+        let frames = pcm.count / 2
+        guard frames > 0,
+              let buffer = AVAudioPCMBuffer(pcmFormat: geminiFormat, frameCapacity: AVAudioFrameCount(frames)),
+              let samples = buffer.floatChannelData?[0] else { return nil }
+        buffer.frameLength = AVAudioFrameCount(frames)
+        pcm.withUnsafeBytes { raw in
+            for index in 0..<frames {
+                samples[index] = Float(Int16(littleEndian: raw.loadUnaligned(fromByteOffset: index * 2, as: Int16.self))) / 32768
+            }
+        }
+        return buffer
     }
 
     /// After the app stops talking, ignore the tail of its own voice before listening again.
     private func watchForSpeechEnd() {
         speechEndTask = Task { [weak self] in
-            while let self, synthesizer.isSpeaking, !Task.isCancelled {
+            while let self, synthesizer.isSpeaking || queuedSpeech > 0, !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(100))
             }
             guard let self, !Task.isCancelled else { return }
@@ -203,6 +273,7 @@ final class VoiceManager {
     // MARK: - Microphone
 
     private func startAudio(analyzerFormat: AVAudioFormat) throws {
+        if engine.isRunning { engine.stop() }  // it may be playing Gemini: voice processing needs it stopped
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothHFP])
         try session.setActive(true)
@@ -223,6 +294,7 @@ final class VoiceManager {
             guard let converted = convertBuffer(buffer, with: converter, to: analyzerFormat) else { return }
             continuation?.yield(AnalyzerInput(buffer: converted))
         }
+        attachPlayer()
         engine.prepare()
         try engine.start()
     }

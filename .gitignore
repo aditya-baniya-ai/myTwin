@@ -9,3 +9,6 @@ __pycache__/
 # Xcode
 DerivedData/
 *.xcuserstate
+
+# Secrets: the Gemini API key. Never commit.
+Config/Secrets.xcconfig

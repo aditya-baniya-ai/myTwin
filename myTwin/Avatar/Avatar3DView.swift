@@ -1,49 +1,22 @@
 import RealityKit
 import SwiftUI
 
-/// The character, live in 3D. The home screen and the picker both use this view, so
-/// framing, lighting and animation are decided in one place.
+/// Dash, live in 3D on his stage, acting out how much energy is left.
 ///
-/// Drag sideways to spin the character; a flick coasts to a stop. The camera never
-/// moves, and nothing here touches the real camera or AR.
+/// Drag sideways to spin him; a flick coasts to a stop. The camera never moves, and
+/// nothing here touches the real camera or AR.
 struct Avatar3DView: View {
-    let character: AvatarCharacter
     /// 0-100, the score the home screen shows as "% charged".
     let energy: Double
-    /// Off while another 3D preview is on screen: shows the rendered still instead, so
-    /// only one scene is ever drawing.
-    var isLive = true
 
     @State private var controller = AvatarAnimationController()
-
-    /// The iOS Simulator only ever draws the first 3D scene an app creates; phones draw
-    /// every one (developer.apple.com/forums/thread/786509). On the Simulator the home
-    /// twin therefore stays live and the picker shows stills, rather than a blank space.
-    #if targetEnvironment(simulator)
-    static let drawsOnlyFirstScene = true
-    #else
-    static let drawsOnlyFirstScene = false
-    #endif
 
     private var state: AvatarEnergyState { AvatarEnergyState(score: energy) }
 
     var body: some View {
-        TwinStage(energy: energy) {
-            if isLive { scene } else { still }
-        }
-        // Only when the scene is swapped for a still. A list scrolling the view off screen
-        // keeps the scene and never rebuilds it, so letting go there would lose the twin.
-        .onChange(of: isLive) { _, live in
-            if !live { controller.stop() }
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(character.name), \(state.rawValue)")
-    }
-
-    private var still: some View {
-        Image(character.stillName(for: state))
-            .resizable()
-            .scaledToFit()
+        TwinStage(energy: energy) { scene }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Dash, \(state.rawValue)")
     }
 
     private var scene: some View {
@@ -54,7 +27,7 @@ struct Avatar3DView: View {
             content.renderingEffects.depthOfField = .disabled
             content.renderingEffects.cameraGrain = .disabled
 
-            guard let avatar = try? await AvatarManager.shared.avatar(for: character) else { return }
+            guard let avatar = try? await LoadedAvatar.load() else { return }
             content.add(controller.stage(avatar))
             content.add(Self.camera(framing: controller.height))
             for light in Self.lights(around: controller.height) {
@@ -67,10 +40,11 @@ struct Avatar3DView: View {
         } update: { _ in
             controller.show(state)
         } placeholder: {
-            still
+            Image(state.stillName)              // while the model loads
+                .resizable()
+                .scaledToFit()
         }
         .gesture(HorizontalPan(changed: controller.drag, ended: controller.release))
-        .id(character)
     }
 
     /// Head to toe with room to jump, looking straight ahead.

@@ -51,15 +51,17 @@
 		000000000000000000000205 /* AvatarImages.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = AvatarImages.xcassets; sourceTree = "<group>"; };
 		000000000000000000000206 /* TwinState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TwinState.swift; sourceTree = "<group>"; };
 		000000000000000000000207 /* myTwinWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = myTwinWidget.entitlements; sourceTree = "<group>"; };
+		000000000000000000000208 /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
+		000000000000000000000209 /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
+		00000000000000000000020A /* myTwin-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "myTwin-Info.plist"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
 		000000000000000000000014 /* Exceptions for "myTwin" folder in "myTwinWidgetExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				Avatar/AvatarCharacter.swift,
-				Avatar/BatteryGlow.swift,
 				Avatar/AvatarEnergyState.swift,
+				Avatar/BatteryGlow.swift,
 			);
 			target = 000000000000000200000000 /* myTwinWidgetExtension */;
 		};
@@ -96,6 +98,7 @@
 				000000000000000000000010 /* myTwin */,
 				000000000000000000000011 /* Shared */,
 				000000000000000000000012 /* myTwinWidget */,
+				000000000000000000000015 /* Config */,
 				000000000000000000000020 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -119,6 +122,16 @@
 				000000000000000000000207 /* myTwinWidget.entitlements */,
 			);
 			path = myTwinWidget;
+			sourceTree = "<group>";
+		};
+		000000000000000000000015 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				000000000000000000000208 /* Base.xcconfig */,
+				000000000000000000000209 /* Secrets.xcconfig */,
+				00000000000000000000020A /* myTwin-Info.plist */,
+			);
+			path = Config;
 			sourceTree = "<group>";
 		};
 		000000000000000000000020 /* Products */ = {
@@ -386,6 +399,7 @@
 		};
 		000000000000000111000000 /* Debug configuration for PBXNativeTarget "myTwin" */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 000000000000000000000208 /* Base.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIcon-Energetic AppIcon-Tired AppIcon-Exhausted";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -395,6 +409,7 @@
 				DEVELOPMENT_TEAM = L2N7935YGL;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/myTwin-Info.plist";
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "This app reads and manages your calendar to help plan your day.";
 				INFOPLIST_KEY_NSCalendarsUsageDescription = "This app reads and manages your calendar to help plan your day.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "This app reads your health data to predict your daily energy levels.";
@@ -430,6 +445,7 @@
 		};
 		000000000000000112000000 /* Release configuration for PBXNativeTarget "myTwin" */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 000000000000000000000208 /* Base.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIcon-Energetic AppIcon-Tired AppIcon-Exhausted";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -439,6 +455,7 @@
 				DEVELOPMENT_TEAM = L2N7935YGL;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/myTwin-Info.plist";
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "This app reads and manages your calendar to help plan your day.";
 				INFOPLIST_KEY_NSCalendarsUsageDescription = "This app reads and manages your calendar to help plan your day.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "This app reads your health data to predict your daily energy levels.";
@@ -475,11 +492,11 @@
 		000000000000000211000000 /* Debug configuration for PBXNativeTarget "myTwinWidgetExtension" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = myTwinWidget/myTwinWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = L2N7935YGL;
 				GENERATE_INFOPLIST_FILE = YES;
-				CODE_SIGN_ENTITLEMENTS = myTwinWidget/myTwinWidget.entitlements;
 				INFOPLIST_FILE = myTwinWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Your twin";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -507,11 +524,11 @@
 		000000000000000212000000 /* Release configuration for PBXNativeTarget "myTwinWidgetExtension" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = myTwinWidget/myTwinWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = L2N7935YGL;
 				GENERATE_INFOPLIST_FILE = YES;
-				CODE_SIGN_ENTITLEMENTS = myTwinWidget/myTwinWidget.entitlements;
 				INFOPLIST_FILE = myTwinWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Your twin";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";

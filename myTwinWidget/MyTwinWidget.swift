@@ -87,7 +87,7 @@ struct WidgetView: View {
     /// The same stage the app draws: light behind, glowing platform, the character's still.
     private var twin: some View {
         TwinStage(energy: entry.energy) {
-            Image(AvatarCharacter.dash.stillName(for: mood))
+            Image(mood.stillName)
                 .resizable()
                 .scaledToFit()
         }

@@ -23,3 +23,26 @@ enum DayCharge {
         return file["hourly_charge"] as? [Double] ?? []
     }()
 }
+
+/// One point of the day's energy forecast.
+struct EnergyPoint: Identifiable {
+    let date: Date
+    let charge: Double          // 0 to 1
+    var id: Date { date }
+}
+
+extension DayCharge {
+    /// The model's forecast for the rest of the day: now, then the top of each hour up to
+    /// `end`, at most `hours` ahead.
+    static func forecast(from start: Double, now: Date = .now, until end: Date, hours: Int = 12) -> [EnergyPoint] {
+        let calendar = Calendar.current
+        let limit = min(end, now.addingTimeInterval(TimeInterval(hours) * 3600))
+        var points = [EnergyPoint(date: now, charge: remaining(from: start, at: now))]
+        var next = calendar.nextDate(after: now, matching: DateComponents(minute: 0), matchingPolicy: .nextTime)
+        while let hour = next, hour <= limit {
+            points.append(EnergyPoint(date: hour, charge: remaining(from: start, at: hour)))
+            next = calendar.date(byAdding: .hour, value: 1, to: hour)
+        }
+        return points
+    }
+}
