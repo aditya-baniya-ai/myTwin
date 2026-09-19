@@ -1,5 +1,6 @@
 import SwiftUI
 import EventKit
+import WidgetKit
 
 struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
@@ -15,6 +16,8 @@ struct ContentView: View {
     @State private var showPicker = false
     /// The visible height of the screen, so the twin can take up most of it.
     @State private var screenHeight: CGFloat = 0
+    /// Moved on at the top of each hour, when the drain curve and the widget move on.
+    @State private var now = Date.now
     @State private var energy: EnergyReading?
     @State private var todayFeatures: [String: Double]?
     @State private var coverage: [String: Int] = [:]
@@ -114,6 +117,7 @@ struct ContentView: View {
                 await updateEnergy()
                 await listen()
             }
+            .task { await followTheHours() }
             .refreshable {
                 await health.refresh()
                 calendar.loadTodayEvents()
@@ -123,7 +127,10 @@ struct ContentView: View {
             .onChange(of: scenePhase) { _, phase in
                 Task {
                     switch phase {
-                    case .active: await listen()
+                    case .active:
+                        now = .now
+                        TwinIcon.show(mood)
+                        await listen()
                     case .background: await voice.stopLiveVoice()
                     default: break
                     }
@@ -194,10 +201,14 @@ struct ContentView: View {
         }
     }
 
+    /// Where today's charge started, from the morning prediction. The widget reads the same
+    /// number (see TwinState), so the app and the widget always agree.
+    private var dayStart: Double { energyModel?.dayStart(for: energy) ?? DayCharge.unknownDay }
+
     /// Right now, as a fraction: the prediction sets the start, the clock drains it.
-    private var charge: Double {
-        energyModel?.charge(for: energy) ?? 0.85
-    }
+    private var charge: Double { DayCharge.remaining(from: dayStart, at: now) }
+
+    private var mood: AvatarEnergyState { AvatarEnergyState(score: charge * 100) }
 
     private var chargeLabel: some View {
         Text("\(Int(charge * 100))% charged")
@@ -284,6 +295,7 @@ struct ContentView: View {
     }
 
     private func updateEnergy() async {
+        defer { shareMood() }           // even without Health data: then it is an average day
         guard health.isAuthorized, let energyModel else { return }
         let (history, searched) = await health.history()
         searchedDays = searched
@@ -300,6 +312,25 @@ struct ContentView: View {
         }
         coverage = await health.coverage(days: 90)
         await notifications.reschedule(bedtime: health.typicalBedtime(from: history))
+    }
+
+    /// Hands today's starting charge to the widget and puts the matching face on the app
+    /// icon, so the app, the widget and the icon all show the same twin.
+    private func shareMood() {
+        TwinState.save(dayStart: dayStart)
+        WidgetCenter.shared.reloadAllTimelines()
+        TwinIcon.show(mood)
+    }
+
+    /// Wakes at the top of each hour, when the charge (and the mood) can change.
+    private func followTheHours() async {
+        while !Task.isCancelled {
+            let nextHour = Calendar.current.nextDate(after: .now, matching: DateComponents(minute: 0),
+                                                     matchingPolicy: .nextTime) ?? .now.addingTimeInterval(3600)
+            try? await Task.sleep(for: .seconds(max(nextHour.timeIntervalSinceNow, 1)))
+            now = .now
+            TwinIcon.show(mood)
+        }
     }
 }
 

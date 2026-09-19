@@ -17,4 +17,14 @@ enum AvatarEnergyState: String, CaseIterable {
 
     /// The looping idle clip that acts out this state: idle_energetic, idle_normal, ...
     var clipName: String { "idle_\(rawValue)" }
+
+    /// One-shot actions played now and then on top of the idle loop.
+    var actions: [String] {
+        switch self {
+        case .energetic: ["wave", "jump"]
+        case .normal: ["stretch"]
+        case .tired: ["yawn"]
+        case .exhausted: ["doze"]
+        }
+    }
 }

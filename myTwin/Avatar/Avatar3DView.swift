@@ -25,32 +25,11 @@ struct Avatar3DView: View {
     static let drawsOnlyFirstScene = false
     #endif
 
-    /// The lens the stills were rendered with, so the placeholder and the live view match.
-    private static let fieldOfView: Float = 30
-    /// Air above the head and below the feet.
-    private static let margin: Float = 1.12
-    /// Extra room under the character for the platform, as a share of the 3D view's height.
-    private static let platformRoom: CGFloat = 0.12
-
     private var state: AvatarEnergyState { AvatarEnergyState(score: energy) }
 
-    /// The light, the platform and the character share one layout: the 3D view (or its
-    /// still) fills the top, and the platform sits where the framing puts the feet.
     var body: some View {
-        GeometryReader { geo in
-            let stage = geo.size.height / (1 + Self.platformRoom)
-            let figure = stage / CGFloat(Self.margin)          // the character's height on screen
-            let feet = stage * (0.5 + 0.5 / CGFloat(Self.margin))
-            ZStack(alignment: .top) {
-                // No wider than the view: the light fades out exactly at its edges, because a
-                // list clips each row to its bounds.
-                BatteryHalo(energy: energy, size: min(figure * 1.05, geo.size.width))
-                    .position(x: geo.size.width / 2, y: feet - figure * 0.6)
-                BatteryPlatform(energy: energy, width: figure * 0.74)
-                    .position(x: geo.size.width / 2, y: feet)
-                Group { if isLive { scene } else { still } }
-                    .frame(width: geo.size.width, height: stage)
-            }
+        TwinStage(energy: energy) {
+            if isLive { scene } else { still }
         }
         // Only when the scene is swapped for a still. A list scrolling the view off screen
         // keeps the scene and never rebuilds it, so letting go there would lose the twin.
@@ -94,12 +73,13 @@ struct Avatar3DView: View {
         .id(character)
     }
 
-    /// Head to toe, looking straight at the character's middle.
+    /// Head to toe with room to jump, looking straight ahead.
     private static func camera(framing height: Float) -> Entity {
         let camera = PerspectiveCamera()
-        camera.camera.fieldOfViewInDegrees = fieldOfView
-        let distance = (height * margin / 2) / tan(fieldOfView / 2 * .pi / 180)
-        camera.position = [0, height / 2, distance]
+        let lens = TwinFraming.fieldOfView
+        camera.camera.fieldOfViewInDegrees = lens
+        let distance = (height * TwinFraming.margin / 2) / tan(lens / 2 * .pi / 180)
+        camera.position = [0, height * (1 + TwinFraming.headroom - TwinFraming.footroom) / 2, distance]
         return camera
     }
 

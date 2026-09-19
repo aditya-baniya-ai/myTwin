@@ -3,15 +3,14 @@ import WidgetKit
 
 /// The twin on the Home Screen, fading as the day wears on.
 ///
-/// A widget cannot run a live 3D scene, so it shows the character's rendered still for
-/// the energy state the clock implies. It cannot see your health data either - sharing
-/// the app's data needs a paid developer account - so it draws the day's measured drain
-/// from an average start.
+/// It shows exactly what the app shows: the app shares where today's charge started (see
+/// TwinState), and both work out each hour's charge with the same curve. A widget cannot
+/// run a live 3D scene, so it draws the character's rendered still for that mood.
 struct MyTwinWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "MyTwinWidget", provider: Provider()) { entry in
             WidgetView(entry: entry)
-                .containerBackground(.fill.tertiary, for: .widget)
+                .containerBackground(for: .widget) { BatteryBackdrop(energy: entry.energy) }
         }
         .configurationDisplayName("Your twin")
         .description("How much of the day you have left in you.")
@@ -34,6 +33,7 @@ struct Provider: TimelineProvider {
     }
 
     /// One entry on each of the next twelve hours, because the curve only moves hourly.
+    /// The app asks for a fresh timeline whenever today's prediction changes.
     func getTimeline(in context: Context, completion: @escaping (Timeline<Entry>) -> Void) {
         var dates = [Date.now]
         let calendar = Calendar.current
@@ -45,7 +45,7 @@ struct Provider: TimelineProvider {
     }
 
     private func entry(at date: Date) -> Entry {
-        Entry(date: date, energy: DayCharge.remaining(from: DayCharge.unknownDay, at: date) * 100)
+        Entry(date: date, energy: TwinState.energy(at: date))
     }
 }
 
@@ -53,14 +53,14 @@ struct WidgetView: View {
     let entry: Entry
     @Environment(\.widgetFamily) private var family
 
-    private var state: AvatarEnergyState { AvatarEnergyState(score: entry.energy) }
+    private var mood: AvatarEnergyState { AvatarEnergyState(score: entry.energy) }
     private var percent: String { "\(Int(entry.energy))%" }
 
     var body: some View {
         switch family {
         case .systemMedium:
-            HStack(spacing: 16) {
-                twin
+            HStack(spacing: 12) {
+                twin.frame(width: 120)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(percent)
                         .font(.system(size: 40, weight: .bold, design: .rounded))
@@ -75,7 +75,7 @@ struct WidgetView: View {
                 Spacer(minLength: 0)
             }
         default:
-            VStack(spacing: 2) {
+            VStack(spacing: 0) {
                 twin
                 Text("\(percent) charged")
                     .font(.caption.weight(.semibold))
@@ -84,14 +84,17 @@ struct WidgetView: View {
         }
     }
 
+    /// The same stage the app draws: light behind, glowing platform, the character's still.
     private var twin: some View {
-        Image(AvatarCharacter.dash.stillName(for: state))
-            .resizable()
-            .scaledToFit()
+        TwinStage(energy: entry.energy) {
+            Image(AvatarCharacter.dash.stillName(for: mood))
+                .resizable()
+                .scaledToFit()
+        }
     }
 
     private var advice: String {
-        switch state {
+        switch mood {
         case .energetic: "Good window for the hard thing."
         case .normal: "Steady. Keep the big tasks moving."
         case .tired: "Past your peak. Save the easy jobs for later."

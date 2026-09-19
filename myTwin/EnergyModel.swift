@@ -91,17 +91,15 @@ struct EnergyModel {
 
     var daysNeeded: Int { file.minHistoryDays }
 
-    /// How much energy is left right now, 0 to 1. The morning prediction sets where the
-    /// day starts; the hourly curve, measured from thousands of real check-ins, drains it.
-    func charge(for reading: EnergyReading?, at date: Date = .now) -> Double {
-        let start: Double
+    /// Where today's charge starts, 0 to 1, from the morning prediction. The hourly curve,
+    /// measured from thousands of real check-ins, drains it from there (see DayCharge).
+    func dayStart(for reading: EnergyReading?) -> Double {
         switch reading?.band {
-        case .above: start = 1.0
-        case .normal: start = 0.88
-        case .below: start = 0.68
-        case nil: start = DayCharge.unknownDay
+        case .above: 1.0
+        case .normal: 0.88
+        case .below: 0.68
+        case nil: DayCharge.unknownDay
         }
-        return DayCharge.remaining(from: start, at: date)
     }
 
     /// Nights that actually hold data, newest first. Counting calendar days instead would

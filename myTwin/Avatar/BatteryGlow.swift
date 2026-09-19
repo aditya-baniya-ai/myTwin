@@ -15,6 +15,43 @@ extension AvatarEnergyState {
     }
 }
 
+/// How the twin is framed, shared by the live camera, the stage layout and the export
+/// script's stills: the lens, and the room above the head (to jump) and below the feet,
+/// as shares of the character's height.
+enum TwinFraming {
+    static let fieldOfView: Float = 30
+    static let headroom: Float = 0.12
+    static let footroom: Float = 0.02
+    static var margin: Float { 1 + headroom + footroom }
+    /// Extra room under the picture for the platform, as a share of its height.
+    static let platformRoom: CGFloat = 0.12
+}
+
+/// The twin on its stage: light behind, the glowing platform underfoot, and the character
+/// (a live 3D scene or a rendered still) where the framing puts it. The app and the
+/// widget both draw the twin through this, so the two always match.
+struct TwinStage<Twin: View>: View {
+    let energy: Double
+    @ViewBuilder let twin: () -> Twin
+
+    var body: some View {
+        GeometryReader { geo in
+            let picture = geo.size.height / (1 + TwinFraming.platformRoom)
+            let figure = picture / CGFloat(TwinFraming.margin)       // the character's height
+            let feet = picture * CGFloat((1 + TwinFraming.headroom) / TwinFraming.margin)
+            ZStack(alignment: .top) {
+                // No wider than the view: a list clips each row to its bounds.
+                BatteryHalo(energy: energy, size: min(figure * 1.05, geo.size.width))
+                    .position(x: geo.size.width / 2, y: feet - figure * 0.6)
+                BatteryPlatform(energy: energy, width: figure * 0.74)
+                    .position(x: geo.size.width / 2, y: feet)
+                twin()
+                    .frame(width: geo.size.width, height: picture)
+            }
+        }
+    }
+}
+
 /// How full the body battery is, 0 to 1, from a 0-100 score.
 func batteryLevel(_ energy: Double) -> Double { min(max(energy / 100, 0), 1) }
 
@@ -47,47 +84,42 @@ struct BatteryBackdrop: View {
     }
 }
 
-/// Light coming from behind the character: a bright core at chest height, a soft aura,
-/// and rays that turn slowly, so the twin looks lit rather than pasted on.
+/// Light behind the character: soft lights in the battery colours drifting slowly round
+/// a bright core that breathes, like an aurora. Brighter the more charge is left.
+/// Gradients rather than blurs, so the constant motion costs the GPU almost nothing.
 struct BatteryHalo: View {
     let energy: Double
     let size: CGFloat
 
-    @State private var turning = false
+    @State private var drifting = false
+    @State private var breathing = false
 
     var body: some View {
         let colors = AvatarEnergyState(score: energy).glow
         let strength = glowStrength(energy)
         ZStack {
-            AngularGradient(stops: Self.rays(colors[1].opacity(0.55 * strength),
-                                             colors[0].opacity(0.28 * strength)),
-                            center: .center)
-                .mask(RadialGradient(colors: [.white, .white.opacity(0.45), .clear], center: .center,
-                                     startRadius: size * 0.06, endRadius: size * 0.5))
-                .rotationEffect(.degrees(turning ? 360 : 0))
-            RadialGradient(colors: [colors[0].opacity(0.5 * strength), colors[1].opacity(0.16 * strength), .clear],
-                           center: .center, startRadius: 0, endRadius: size * 0.5)
-            RadialGradient(colors: [.white.opacity(0.75 * strength), colors[1].opacity(0.45 * strength), .clear],
-                           center: .center, startRadius: 0, endRadius: size * 0.22)
+            ZStack {
+                ForEach(0..<3, id: \.self) { light in
+                    RadialGradient(colors: [colors[light == 1 ? 1 : 0].opacity(0.62 * strength), .clear],
+                                   center: .center, startRadius: 0, endRadius: size * 0.32)
+                        .frame(width: size * 0.64, height: size * 0.64)
+                        .offset(x: size * 0.12)
+                        .rotationEffect(.degrees(Double(light) * 120))
+                }
+            }
+            .rotationEffect(.degrees(drifting ? 360 : 0))
+            .scaleEffect(x: 1, y: 1.18)                         // taller than wide, like the body
+            RadialGradient(colors: [.white.opacity(0.5 * strength), colors[1].opacity(0.4 * strength), .clear],
+                           center: .center, startRadius: 0, endRadius: size * 0.26)
+                .scaleEffect(breathing ? 1.08 : 0.92)
         }
         .frame(width: size, height: size)
         .onAppear {
-            withAnimation(.linear(duration: 90).repeatForever(autoreverses: false)) { turning = true }
+            withAnimation(.linear(duration: 24).repeatForever(autoreverses: false)) { drifting = true }
+            withAnimation(.easeInOut(duration: 3.2).repeatForever(autoreverses: true)) { breathing = true }
         }
         .animation(.easeOut(duration: 0.5), value: energy)
         .allowsHitTesting(false)
-    }
-
-    /// Eighteen soft-edged rays, alternating strong and faint.
-    private static func rays(_ strong: Color, _ faint: Color) -> [Gradient.Stop] {
-        let count = 18
-        let width = 1.0 / Double(count)
-        return (0..<count).flatMap { ray -> [Gradient.Stop] in
-            let start = Double(ray) * width
-            return [.init(color: .clear, location: start + width * 0.2),
-                    .init(color: ray.isMultiple(of: 2) ? strong : faint, location: start + width * 0.5),
-                    .init(color: .clear, location: start + width * 0.8)]
-        }
     }
 }
 

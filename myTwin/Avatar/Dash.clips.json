@@ -3,19 +3,48 @@
   "clips": {
     "idle_normal": {
       "start": 0.0,
-      "end": 4.0
+      "end": 4.0,
+      "loops": true
     },
     "idle_energetic": {
       "start": 4.033333333333333,
-      "end": 8.033333333333333
+      "end": 8.033333333333333,
+      "loops": true
     },
     "idle_tired": {
       "start": 8.066666666666666,
-      "end": 14.066666666666666
+      "end": 14.066666666666666,
+      "loops": true
     },
     "idle_exhausted": {
       "start": 14.1,
-      "end": 22.1
+      "end": 22.1,
+      "loops": true
+    },
+    "wave": {
+      "start": 22.133333333333333,
+      "end": 24.533333333333335,
+      "loops": false
+    },
+    "jump": {
+      "start": 24.566666666666666,
+      "end": 26.266666666666666,
+      "loops": false
+    },
+    "stretch": {
+      "start": 26.3,
+      "end": 30.3,
+      "loops": false
+    },
+    "yawn": {
+      "start": 30.333333333333332,
+      "end": 34.833333333333336,
+      "loops": false
+    },
+    "doze": {
+      "start": 34.86666666666667,
+      "end": 40.86666666666667,
+      "loops": false
     }
   }
 }
