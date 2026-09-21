@@ -1,98 +1,82 @@
 import Foundation
 import UserNotifications
 
-/// Daily nudges, scheduled on the phone. Each one says *why*, because a reminder you
-/// understand is one you might actually follow.
+/// The day's nudges, scheduled on the phone. There is nothing to switch on: allow
+/// notifications once and you get all of them, because they are the point of the app
+/// rather than a settings menu. Each one says *why*, so it is worth following.
 @MainActor
 @Observable
 final class NotificationManager {
-    enum Kind: String, CaseIterable, Identifiable {
-        case bedtime, caffeine, hydration, nap
-        var id: String { rawValue }
-
-        var title: String {
-            switch self {
-            case .bedtime: "Bedtime"
-            case .caffeine: "Last coffee"
-            case .hydration: "Water breaks"
-            case .nap: "Afternoon dip"
-            }
-        }
-
-        var explanation: String {
-            switch self {
-            case .bedtime: "A wind-down nudge before your usual bedtime"
-            case .caffeine: "So caffeine has cleared before you sleep"
-            case .hydration: "Three reminders through the day"
-            case .nap: "When your energy drops hardest"
-            }
-        }
-    }
-
     private let centre = UNUserNotificationCenter.current()
-    private static let enabledKey = "reminderKinds"
-
-    var enabled: Set<String> {
-        didSet { UserDefaults.standard.set(Array(enabled), forKey: Self.enabledKey) }
-    }
     private(set) var permissionDenied = false
     private(set) var bedtime = (hour: 23, minute: 0)
+    /// The line the morning nudge carries, written from the latest reading.
+    private(set) var brief = "Here's how today looks."
 
-    init() {
-        enabled = Set(UserDefaults.standard.stringArray(forKey: Self.enabledKey) ?? [])
-    }
 
-    func isOn(_ kind: Kind) -> Bool { enabled.contains(kind.rawValue) }
-
-    func toggle(_ kind: Kind) async {
-        if enabled.contains(kind.rawValue) {
-            enabled.remove(kind.rawValue)
-        } else {
-            guard await requestPermission() else { permissionDenied = true; return }
-            enabled.insert(kind.rawValue)
-        }
-        await reschedule(bedtime: bedtime)
-    }
-
-    private func requestPermission() async -> Bool {
-        (try? await centre.requestAuthorization(options: [.alert, .sound, .badge])) ?? false
+    /// Asks the first time, and answers from the stored decision afterwards: iOS only
+    /// ever shows the question once.
+    private func allowed() async -> Bool {
+        let granted = (try? await centre.requestAuthorization(options: [.alert, .sound, .badge])) ?? false
+        permissionDenied = !granted
+        return granted
     }
 
     /// Rebuilds the whole schedule. Cheap, and avoids duplicates piling up.
-    func reschedule(bedtime: (hour: Int, minute: Int)) async {
+    func reschedule(bedtime: (hour: Int, minute: Int), brief: String? = nil,
+                    events: [(title: String, start: Date, note: String)] = []) async {
         self.bedtime = bedtime
+        if let brief { self.brief = brief }
         centre.removeAllPendingNotificationRequests()
-        guard !enabled.isEmpty else { return }
+        guard await allowed() else { return }
 
         let wind = shift(bedtime, byMinutes: -45)
         let sleepHours = 8
 
-        if isOn(.bedtime) {
-            add(id: "bedtime", at: wind,
-                title: "Time to wind down",
-                body: "Lights out around \(clock(bedtime)) gives you about \(sleepHours) hours. Deep sleep comes mostly in the first half of the night, so going to bed on time matters more than sleeping in.")
+        // Eight hours after your usual bedtime: roughly when you are up and deciding what
+        // the day looks like.
+        add(id: "morning", at: shift(bedtime, byMinutes: sleepHours * 60),
+            title: "Good morning", body: self.brief)
+
+        // Ten minutes ahead of each of today's events, with the energy you'll have.
+        for (index, event) in events.enumerated() where event.start.timeIntervalSinceNow > 600 {
+            add(id: "event\(index)", on: event.start.addingTimeInterval(-600),
+                title: event.title, body: event.note)
         }
-        if isOn(.caffeine) {
-            // Caffeine's half-life is roughly 5 hours, so stop about 8 before bed.
-            add(id: "caffeine", at: shift(bedtime, byMinutes: -8 * 60),
-                title: "Last coffee of the day",
-                body: "Caffeine halves roughly every 5 hours. A cup now still leaves about a quarter of it in you at \(clock(bedtime)), which costs you deep sleep even if you fall asleep fine.")
+
+        add(id: "bedtime", at: wind,
+            title: "Time to wind down",
+            body: "Lights out around \(clock(bedtime)) gives you about \(sleepHours) hours. Deep sleep comes mostly in the first half of the night, so going to bed on time matters more than sleeping in.")
+
+        // Caffeine's half-life is roughly 5 hours, so stop about 8 before bed.
+        add(id: "caffeine", at: shift(bedtime, byMinutes: -8 * 60),
+            title: "Last coffee of the day",
+            body: "Caffeine halves roughly every 5 hours. A cup now still leaves about a quarter of it in you at \(clock(bedtime)), which costs you deep sleep even if you fall asleep fine.")
+
+        add(id: "nap", at: (14, 0),
+            title: "Your dip is coming",
+            body: "Energy falls hardest between 2pm and 4pm. A 20 minute nap now, or a short walk outside, beats another coffee you will still feel tonight.")
+
+        let water = [
+            "Even mild dehydration shows up as tiredness before you feel thirsty.",
+            "A glass now keeps the afternoon dip shallower.",
+            "Last good moment to drink: too late and it wakes you up at night.",
+        ]
+        for (index, hour) in [10, 14, 17].enumerated() {
+            add(id: "hydration\(hour)", at: (hour, 0), title: "Water break", body: water[index])
         }
-        if isOn(.nap) {
-            add(id: "nap", at: (14, 0),
-                title: "Your dip is coming",
-                body: "Energy falls hardest between 2pm and 4pm. A 20 minute nap now, or a short walk outside, beats another coffee you will still feel tonight.")
-        }
-        if isOn(.hydration) {
-            let bodies = [
-                "Even mild dehydration shows up as tiredness before you feel thirsty.",
-                "A glass now keeps the afternoon dip shallower.",
-                "Last good moment to drink: too late and it wakes you up at night.",
-            ]
-            for (index, hour) in [10, 14, 17].enumerated() {
-                add(id: "hydration\(hour)", at: (hour, 0), title: "Water break", body: bodies[index])
-            }
-        }
+    }
+
+    /// A one-off nudge at a given moment, for things that happen once: today's events.
+    private func add(id: String, on date: Date, title: String, body: String) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+
+        let when = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: date)
+        let trigger = UNCalendarNotificationTrigger(dateMatching: when, repeats: false)
+        centre.add(UNNotificationRequest(identifier: id, content: content, trigger: trigger))
     }
 
     private func add(id: String, at time: (hour: Int, minute: Int), title: String, body: String) {

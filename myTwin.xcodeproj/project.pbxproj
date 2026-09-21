@@ -413,6 +413,7 @@
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "This app reads and manages your calendar to help plan your day.";
 				INFOPLIST_KEY_NSCalendarsUsageDescription = "This app reads and manages your calendar to help plan your day.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "This app reads your health data to predict your daily energy levels.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "myTwin saves the weigh-ins you log to Apple Health, so every app sees the same weight.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "myTwin listens so you can plan your day by voice.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Your speech is turned into text on your device so myTwin can understand you.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
@@ -459,6 +460,7 @@
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "This app reads and manages your calendar to help plan your day.";
 				INFOPLIST_KEY_NSCalendarsUsageDescription = "This app reads and manages your calendar to help plan your day.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "This app reads your health data to predict your daily energy levels.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "myTwin saves the weigh-ins you log to Apple Health, so every app sees the same weight.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "myTwin listens so you can plan your day by voice.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Your speech is turned into text on your device so myTwin can understand you.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;

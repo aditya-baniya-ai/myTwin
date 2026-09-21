@@ -3,7 +3,7 @@ import AVFoundation
 import CoreMedia
 import Speech
 
-/// Live voice: listens for the wake phrase "my twin", then takes spoken instructions,
+/// Live voice: listens for the wake word "twin", then takes spoken instructions,
 /// speaks answers (in the iPhone's voice, or Gemini's when it answers), and lets you talk
 /// over it.
 ///
@@ -24,8 +24,9 @@ final class VoiceManager {
         var errorDescription: String? { "This device's microphone format isn't supported." }
     }
 
-    /// How long a pause means "your sentence is finished". Too short and it cuts people off.
-    private let pauseBeforeSending: TimeInterval = 2.0
+    /// Hands-free, how long a pause means "your sentence is finished". Long, because being
+    /// cut off mid-thought is worse than waiting. Tap Dash instead and nothing cuts you off.
+    private let pauseBeforeSending: TimeInterval = 5.0
     /// Back to sleep after this much quiet, so it stops reacting to the room.
     private let sleepAfterIdle: TimeInterval = 30
     /// How long the app's own voice keeps echoing after it stops talking.
@@ -36,14 +37,31 @@ final class VoiceManager {
     var speaksAnswers = true
     private(set) var isLive = false
     private(set) var isAwake = false
+    /// Tap to talk: listening until you tap again, however long you pause.
+    private(set) var isDictating = false
+    /// You are holding Dash down, so letting go is what ends it.
+    private(set) var isHeld = false
+    /// A call, Siri or another app has the microphone. Nothing can be heard until it ends.
+    private(set) var isInterrupted = false
+    /// The microphone is really running, not just meant to be.
+    private(set) var isHearing = false
+
+    /// How to finish, in the words that match the way you started.
+    var listeningHint: String {
+        isHeld ? "Listening… let go when you're done" : "Listening… tap Dash again when you're done"
+    }
 
     /// One line of plain status, shown on both the home screen and the chat.
     var statusNote: String? {
         switch status {
         case .idle: nil
         case .preparing: "Getting the offline voice model ready…"
-        case .listening: isAwake ? "Listening. Just talk, and talk over me to interrupt."
-                                 : "Say \"my twin\" to wake me."
+        case _ where isInterrupted:
+            "Your microphone is busy with a call. myTwin listens again when it ends."
+        case .listening where !isHearing: "Starting the microphone…"
+        case .listening: isDictating ? listeningHint
+                       : isAwake ? "Listening. Just talk, and talk over me to interrupt."
+                                 : "Hold Dash while you talk, or tap to start and tap again. Or say \"twin\"."
         case .unavailable(let reason): reason
         }
     }
@@ -56,15 +74,22 @@ final class VoiceManager {
     private let player = AVAudioPlayerNode()
     private let geminiFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 24_000,
                                              channels: 1, interleaved: false)!
+    private var speechConverter: AVAudioConverter?
     private var queuedSpeech = 0         // pieces of Gemini's voice waiting to play
     private var speechCut = false        // you talked over Gemini: skip the rest of that answer
     private var analyzer: SpeechAnalyzer?
     private var inputStream: AsyncStream<AnalyzerInput>.Continuation?
     private var resultsTask: Task<Void, Never>?
     private var silenceTask: Task<Void, Never>?
+    private var engineTask: Task<Void, Never>?
+    private var interruptionTask: Task<Void, Never>?
+    private var analyzerFormat: AVAudioFormat?
     private var speechEndTask: Task<Void, Never>?
     private var onSentence: ((String) -> Void)?
-    private var finalText = ""
+    /// What you have said so far, in pieces. The recogniser often revises a stretch it
+    /// already reported, so pieces are replaced by range rather than piled up: without this
+    /// the same sentence comes back twice, with two different endings.
+    private var pieces: [(range: CMTimeRange, text: String)] = []
     private var lastHeard = Date.now
     private var lastSpoken = ""
     private var isSpeakingNow = false
@@ -85,7 +110,7 @@ final class VoiceManager {
         self.onSentence = onSentence
         status = .preparing
         transcript = ""
-        finalText = ""
+        pieces = []
         sentUpTo = .zero
         latestResultEnd = .zero
 
@@ -116,8 +141,11 @@ final class VoiceManager {
             analyzer = SpeechAnalyzer(inputSequence: stream, modules: [transcriber])
 
             readResults(from: transcriber)
+            self.analyzerFormat = analyzerFormat
             try startAudio(analyzerFormat: analyzerFormat)
             watchForSilence()
+            watchTheEngine()
+            watchForInterruptions()
             status = .listening
         } catch {
             await stopLiveVoice()
@@ -129,13 +157,19 @@ final class VoiceManager {
     func stopLiveVoice() async {
         isLive = false
         isAwake = false
+        isDictating = false
         onSentence = nil
         stopSpeaking()
 
         silenceTask?.cancel()
         resultsTask?.cancel()
+        engineTask?.cancel()
+        interruptionTask?.cancel()
         silenceTask = nil
         resultsTask = nil
+        engineTask = nil
+        interruptionTask = nil
+        isInterrupted = false
 
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
@@ -146,9 +180,45 @@ final class VoiceManager {
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
 
         transcript = ""
-        finalText = ""
+        pieces = []
         recentSpeech = []
         if status == .listening || status == .preparing { status = .idle }
+    }
+
+    // MARK: - Tap to talk
+
+    /// Starts a dictation that you end yourself, so no pause is ever taken for the end.
+    /// `untilRelease` when you are holding Dash down rather than tapping him.
+    func startDictation(untilRelease: Bool = false) {
+        guard status == .listening else { return }
+        stopSpeaking()                  // tapping Dash while he talks means you want the floor
+        isDictating = true
+        isHeld = untilRelease
+        isAwake = true
+        recentSpeech = []
+        pieces = []
+        transcript = ""
+        sentUpTo = latestResultEnd      // ignore whatever was said before the tap
+        lastHeard = .now
+    }
+
+    /// Ends the dictation and sends what you said.
+    func finishDictation() {
+        guard isDictating else { return }
+        Task { [weak self] in
+            // The last word can still be on its way from the recogniser.
+            try? await Task.sleep(for: .milliseconds(500))
+            guard let self, isDictating else { return }
+            isDictating = false
+            isHeld = false
+            isAwake = false
+            let sentence = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+            sentUpTo = latestResultEnd
+            transcript = ""
+            pieces = []
+            lastHeard = .now
+            if !sentence.isEmpty { onSentence?(withoutWakePhrase(sentence)) }
+        }
     }
 
     // MARK: - Speaking
@@ -197,8 +267,9 @@ final class VoiceManager {
 
     /// Plays the next piece of Gemini's voice as it streams in.
     func play(geminiSpeech pcm: Data) {
-        guard speaksAnswers, !speechCut, let buffer = floatBuffer(fromPCM16: pcm) else { return }
+        guard speaksAnswers, !speechCut, let piece = floatBuffer(fromPCM16: pcm) else { return }
         do { try startPlayer() } catch { return }
+        guard let buffer = matchEngine(piece) else { return }
         queuedSpeech += 1
         isSpeakingNow = true
         // The manager lives as long as the app, so holding it until the piece plays is fine.
@@ -213,6 +284,8 @@ final class VoiceManager {
     }
 
     private func startPlayer() throws {
+        // Attached only now: adding it before the microphone starts stops the engine dead,
+        // and then nothing is ever heard.
         attachPlayer()
         if !engine.isRunning {
             // Not listening: play through the speaker and leave the microphone off.
@@ -227,7 +300,20 @@ final class VoiceManager {
     private func attachPlayer() {
         guard player.engine == nil else { return }
         engine.attach(player)
-        engine.connect(player, to: engine.mainMixerNode, format: geminiFormat)
+        // The mixer's own format: a 24 kHz connection alongside the microphone's echo
+        // cancellation is what stopped the engine.
+        engine.connect(player, to: engine.mainMixerNode, format: nil)
+    }
+
+    /// Gemini's 24 kHz voice, resampled to whatever the engine plays.
+    private func matchEngine(_ buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {
+        let format = player.outputFormat(forBus: 0)
+        guard format.sampleRate > 0, format != buffer.format else { return buffer }
+        if speechConverter?.inputFormat != buffer.format || speechConverter?.outputFormat != format {
+            speechConverter = AVAudioConverter(from: buffer.format, to: format)
+        }
+        guard let speechConverter else { return nil }
+        return convertBuffer(buffer, with: speechConverter, to: format)
     }
 
     /// 16-bit samples as they arrive from Gemini, to the float samples the engine plays.
@@ -256,7 +342,7 @@ final class VoiceManager {
             try? await Task.sleep(for: echoTail)
             guard !Task.isCancelled else { return }
             transcript = ""
-            finalText = ""
+            pieces = []
             sentUpTo = latestResultEnd
             lastHeard = .now
         }
@@ -291,12 +377,56 @@ final class VoiceManager {
         input.installTap(onBus: 0, bufferSize: 4096, format: micFormat) { buffer, _ in
             // Runs on the audio thread. The recogniser needs its own format: feeding it the
             // microphone's format transcribes nothing at all, with no error.
-            guard let converted = convertBuffer(buffer, with: converter, to: analyzerFormat) else { return }
+            guard let converted = convertBuffer(buffer, with: converter, to: analyzerFormat) else {
+                return
+            }
             continuation?.yield(AnalyzerInput(buffer: converted))
         }
-        attachPlayer()
         engine.prepare()
         try engine.start()
+        isHearing = engine.isRunning
+    }
+
+    /// While a call holds the microphone there is nothing to restart, and trying would only
+    /// fight it. This notices the call starting and ending.
+    private func watchForInterruptions() {
+        interruptionTask?.cancel()
+        interruptionTask = Task { [weak self] in
+            let interruptions = NotificationCenter.default.notifications(named: AVAudioSession.interruptionNotification)
+            for await note in interruptions {
+                guard let self else { return }
+                let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt ?? 0
+                switch AVAudioSession.InterruptionType(rawValue: raw) {
+                case .began:
+                    isInterrupted = true
+                    isDictating = false          // whatever you were saying is lost with the microphone
+                    isHeld = false
+                    isAwake = false
+                case .ended:
+                    isInterrupted = false        // the engine watchdog starts the microphone again
+                default:
+                    break
+                }
+            }
+        }
+    }
+
+    /// A call, Siri or an audio glitch can stop the engine under us. Start it again, so the
+    /// microphone never goes quiet without anyone noticing.
+    private func watchTheEngine() {
+        engineTask?.cancel()
+        engineTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(2))
+                guard let self else { return }
+                isHearing = engine.isRunning
+                guard isLive, status == .listening, !isInterrupted, !engine.isRunning,
+                      let analyzerFormat else { continue }
+                engine.inputNode.removeTap(onBus: 0)
+                try? startAudio(analyzerFormat: analyzerFormat)
+                isHearing = engine.isRunning
+            }
+        }
     }
 
     // MARK: - Results
@@ -315,27 +445,27 @@ final class VoiceManager {
                     if isSpeakingNow {
                         guard isInterruption(text) else {
                             // The app hearing itself: throw it away.
-                            finalText = ""
+                            pieces = []
                             transcript = ""
                             continue
                         }
                         stopSpeaking()  // you talked over it
-                        finalText = ""
+                        pieces = []
                     }
 
-                    let heard = result.isFinal ? finalText + text : finalText + text
-                    if result.isFinal { finalText += text }
+                    let heard = sentence(adding: text, for: result.range)
+                    if result.isFinal { keep(text, for: result.range) }
 
                     if isAwake {
                         transcript = heard
                         lastHeard = .now
                     } else if let command = commandAfterWakePhrase(in: (recentSpeech + [heard]).joined(separator: " ")) {
-                        wakeUp(with: command)
+                        wakeUp(with: command, at: result.range)
                     } else if result.isFinal {
-                        // The recogniser often splits "my twin" across two results, so keep the
-                        // last couple of them: clearing immediately meant the phrase never matched.
+                        // The recogniser often splits the wake word across two results, so keep
+                        // the last couple: clearing immediately meant it never matched.
                         recentSpeech = (recentSpeech + [text]).suffix(2).map { $0 }
-                        finalText = ""
+                        pieces = []
                         transcript = ""
                         sentUpTo = latestResultEnd
                     }
@@ -346,13 +476,26 @@ final class VoiceManager {
         }
     }
 
-    private func wakeUp(with command: String) {
+    private func wakeUp(with command: String, at range: CMTimeRange) {
         isAwake = true
         recentSpeech = []
-        finalText = command
+        pieces = command.isEmpty ? [] : [(range, command)]
         transcript = command
         lastHeard = .now
         if command.isEmpty { speak("Yes?") }
+    }
+
+    /// What you have said, with `text` replacing any earlier version of the same stretch.
+    private func sentence(adding text: String, for range: CMTimeRange) -> String {
+        (pieces.filter { $0.range.intersection(range).isEmpty } + [(range: range, text: text)])
+            .sorted { $0.range.start < $1.range.start }
+            .map(\.text)
+            .joined()
+    }
+
+    private func keep(_ text: String, for range: CMTimeRange) {
+        pieces.removeAll { !$0.range.intersection(range).isEmpty }
+        pieces.append((range, text))
     }
 
     /// Real speech while the app is talking, rather than its own voice coming back.
@@ -379,6 +522,12 @@ final class VoiceManager {
 
                 guard isAwake else { continue }
 
+                if isDictating {
+                    // You end this one yourself, unless you walk away from it.
+                    if !isSpeakingNow, quietFor > sleepAfterIdle { finishDictation() }
+                    continue
+                }
+
                 if sentence.isEmpty {
                     if !isSpeakingNow, quietFor > sleepAfterIdle { isAwake = false }
                     continue
@@ -387,9 +536,9 @@ final class VoiceManager {
 
                 sentUpTo = latestResultEnd  // don't hear this sentence a second time
                 transcript = ""
-                finalText = ""
+                pieces = []
                 lastHeard = .now
-                onSentence?(sentence)
+                onSentence?(withoutWakePhrase(sentence))
             }
         }
     }
@@ -439,12 +588,18 @@ nonisolated func convertBuffer(_ buffer: AVAudioPCMBuffer,
     return output
 }
 
-/// Finds "my twin" (or "hey twin") and returns whatever was said after it, "" if nothing.
-/// Returns nil when the phrase isn't there, so the app stays asleep.
+/// Finds "twin" (also "my twin", "hey twin") and returns whatever was said after it, ""
+/// if nothing. Returns nil when the word isn't there, so the app stays asleep.
 nonisolated func commandAfterWakePhrase(in text: String) -> String? {
-    let phrase = /(?i)\b(?:hey|my|hi)[\s,-]*twins?\b[\s,.!?]*/
+    let phrase = /(?i)\b(?:hey|my|hi)?[\s,-]*twins?\b[\s,.!?]*/
     guard let match = text.firstMatch(of: phrase) else { return nil }
     return String(text[match.range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+/// Drops a leading "twin", so the question reads the way you meant it.
+nonisolated func withoutWakePhrase(_ text: String) -> String {
+    guard let command = commandAfterWakePhrase(in: text), text.count - command.count <= 20 else { return text }
+    return command
 }
 
 /// How much of what was heard also appears in what the app just said, 0…1.

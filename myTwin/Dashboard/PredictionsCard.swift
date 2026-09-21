@@ -50,22 +50,32 @@ struct PredictionsCard: View {
                     .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round))
                     .foregroundStyle(LinearGradient(colors: colors, startPoint: .leading, endPoint: .trailing))
             }
+            // The value sits next to each dot, so nobody has to judge it against the axis.
             if let peak {
                 PointMark(x: .value("Time", peak.date), y: .value("Energy", peak.charge * 100))
                     .symbolSize(110)
                     .foregroundStyle(.green)
+                    .annotation(position: .trailing, spacing: 6, overflowResolution: .init(x: .fit(to: .chart), y: .fit(to: .chart))) {
+                        valueLabel(peak, .green)
+                    }
             }
             if let dip {
                 PointMark(x: .value("Time", dip.date), y: .value("Energy", dip.charge * 100))
                     .symbolSize(110)
                     .foregroundStyle(.orange)
+                    .annotation(position: .top, spacing: 6, overflowResolution: .init(x: .fit(to: .chart), y: .fit(to: .chart))) {
+                        valueLabel(dip, .orange)
+                    }
             }
         }
         .chartYScale(domain: 0...100)
         .chartYAxis {
-            AxisMarks(values: [0, 50, 100]) { value in
-                AxisGridLine()
-                AxisValueLabel { Text("\(value.as(Int.self) ?? 0)%") }
+            AxisMarks(values: [0, 25, 50, 75, 100]) { value in
+                let percent = value.as(Int.self) ?? 0
+                AxisGridLine().foregroundStyle(.secondary.opacity(percent % 50 == 0 ? 0.5 : 0.2))
+                if percent % 50 == 0 {
+                    AxisValueLabel { Text("\(percent)%") }
+                }
             }
         }
         .chartXAxis {
@@ -74,6 +84,12 @@ struct PredictionsCard: View {
                 AxisValueLabel(format: .dateTime.hour())
             }
         }
+    }
+
+    private func valueLabel(_ point: EnergyPoint, _ tint: Color) -> some View {
+        Text("\(Int(point.charge * 100))%")
+            .font(.caption.weight(.bold))
+            .foregroundStyle(tint)
     }
 
     private func moment(_ label: String, _ point: EnergyPoint, symbol: String, tint: Color) -> some View {

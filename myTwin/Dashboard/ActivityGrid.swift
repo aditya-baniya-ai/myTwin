@@ -15,6 +15,8 @@ struct ActivityGrid: View {
     let activeEnergy: Double?
     let sleepWeek: [Double?]             // hours a night, oldest first: the last is last night
     let weights: [WeightSample]          // oldest first
+    /// Shows a + on the Weight card that calls this.
+    var addWeight: (() -> Void)?
 
     @State private var shown = false
 
@@ -42,7 +44,7 @@ struct ActivityGrid: View {
             }
             GlanceCard(title: "Weight", symbol: "scalemass.fill", tint: Self.weightColors[0],
                        value: weights.last.map { String(format: "%.1f lb", $0.pounds) } ?? "—",
-                       detail: weightDetail) {
+                       detail: weightDetail, action: addWeight) {
                 ring(weightProgress, Self.weightColors, label: weights.isEmpty ? "—" : nil)
             }
         }
@@ -105,14 +107,25 @@ private struct GlanceCard<Chart: View>: View {
     let tint: Color
     let value: String
     let detail: String
+    /// When set, a + in the corner calls it.
+    var action: (() -> Void)? = nil
     @ViewBuilder let chart: () -> Chart
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label(title, systemImage: symbol)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(tint)
-                .lineLimit(1)
+            HStack {
+                Label(title, systemImage: symbol)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(tint)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                if let action {
+                    Button("Log \(title.lowercased())", systemImage: "plus.circle.fill", action: action)
+                        .labelStyle(.iconOnly)
+                        .font(.title3)
+                        .foregroundStyle(tint)
+                }
+            }
             chart()
                 .frame(maxWidth: .infinity)
                 .frame(height: 76)
@@ -129,6 +142,80 @@ private struct GlanceCard<Chart: View>: View {
         }
         .dashboardCard(padding: 14)
     }
+}
+
+/// Log this morning's weigh-in. It's saved to Apple Health, so the card and any other app
+/// that reads weight see it.
+struct LogWeightSheet: View {
+    let last: Double?
+    let save: (Double) async throws -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var text = ""
+    @State private var problem: String?
+    @State private var saving = false
+    @FocusState private var focused: Bool
+
+    /// Accepts "152.4" and "152,4".
+    private var pounds: Double? {
+        Double(text.replacingOccurrences(of: ",", with: ".")).flatMap { (50...700).contains($0) ? $0 : nil }
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 10) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    TextField("0.0", text: $text)
+                        .keyboardType(.decimalPad)
+                        .font(.system(size: 52, weight: .bold, design: .rounded))
+                        .multilineTextAlignment(.trailing)
+                        .fixedSize()
+                        .focused($focused)
+                    Text("lb").font(.title2.weight(.semibold)).foregroundStyle(.secondary)
+                }
+                Text("Target \(Int(Goals.weight)) lb")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                if let problem {
+                    Text(problem).font(.footnote).foregroundStyle(.red).multilineTextAlignment(.center)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding()
+            .navigationTitle("Log weight")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { store() }.disabled(pounds == nil || saving)
+                }
+            }
+            .onAppear {
+                text = last.map { String(format: "%.1f", $0) } ?? ""
+                focused = true
+            }
+        }
+        .presentationDetents([.height(260)])
+    }
+
+    private func store() {
+        guard let pounds else { return }
+        saving = true
+        Task {
+            do {
+                try await save(pounds)
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                dismiss()
+            } catch {
+                problem = error.localizedDescription
+            }
+            saving = false
+        }
+    }
+}
+
+#Preview("Log weight") {
+    LogWeightSheet(last: 152.4) { _ in }
 }
 
 #Preview("Activity grid") {

@@ -14,8 +14,6 @@ struct ContentView: View {
 
     @State private var showChat = false
     @State private var askGemini = false
-    /// The visible height of the screen, so the twin can take up most of it.
-    @State private var screenHeight: CGFloat = 0
     /// Moved on at the top of each hour, when the drain curve and the widget move on.
     @State private var now = Date.now
     @State private var energy: EnergyReading?
@@ -26,12 +24,20 @@ struct ContentView: View {
     @State private var searchedDays = 0
     @State private var sleepWeek: [Double?] = []
     @State private var weights: [WeightSample] = []
+    /// Apple Health has a workout recorded today, so the plan stops suggesting one.
+    @State private var trainedToday = false
+    @State private var loggingWeight = false
+    @State private var dismissed = DismissedSuggestions.today()
+    /// Your finger is down on Dash: listening lasts as long as you hold him.
+    @State private var holding = false
+    /// When the last hold ended, so letting go doesn't also count as a tap.
+    @State private var heldUntil = Date.distantPast
 
     private let energyModel = EnergyModel()
 
     init() {
         // The chat uses the same health and calendar data the home screen shows, and speaks
-        // through the same voice that listens for "my twin".
+        // through the same voice that listens for "twin".
         let health = HealthManager()
         let calendar = CalendarManager()
         let voice = VoiceManager()
@@ -60,9 +66,6 @@ struct ContentView: View {
                         if health.isAuthorized, !week.isEmpty {
                             DashboardSection(title: "Your last 7 days") { WeekStrip(days: week).dashboardCard() }
                         }
-                        DashboardSection(title: "Reminders") {
-                            VStack(alignment: .leading, spacing: 14) { remindersRows }.dashboardCard()
-                        }
                         if health.isAuthorized {
                             DashboardSection(title: "What myTwin can read") {
                                 CoverageSection(coverage: coverage, windowDays: 90).dashboardCard()
@@ -77,11 +80,17 @@ struct ContentView: View {
                 .padding(.bottom, 24)
             }
             .background { BatteryBackdrop(energy: charge * 100) }
-            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { screenHeight = $0 }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 Button("Ask myTwin", systemImage: "bubble.left.and.text.bubble.right") {
                     showChat = true
+                }
+            }
+            .sheet(isPresented: $loggingWeight) {
+                LogWeightSheet(last: weights.last?.pounds) { pounds in
+                    try await health.logWeight(pounds: pounds)
+                    weights = await health.weights()
+        trainedToday = await !health.workoutsToday().isEmpty
                 }
             }
             .sheet(isPresented: $askGemini) {
@@ -110,7 +119,8 @@ struct ContentView: View {
                     switch phase {
                     case .active:
                         now = .now
-                        TwinIcon.show(mood)
+                        await health.refresh()          // your watch may have synced since
+                        await updateEnergy()
                         await listen()
                     case .background:
                         chat.endGemini()
@@ -133,12 +143,12 @@ struct ContentView: View {
         VStack(spacing: 10) {
             BrandTitle()
             Avatar3DView(energy: charge * 100)
-                .frame(height: max(screenHeight * 0.7, 320))
-                .onTapGesture {
-                    UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-                    showChat = true
-                }
-                .accessibilityLabel("Your twin, \(Int(charge * 100)) percent charged. Tap to chat.")
+                .containerRelativeFrame(.vertical) { height, _ in max(height * 0.7, 320) }
+                .overlay { if voice.isDictating { ListeningRing() } }
+                .onTapGesture(perform: talk)
+                .gesture(HoldToTalk(began: startHolding, ended: stopHolding))
+                .accessibilityLabel("Your twin, \(Int(charge * 100)) percent charged. Tap to talk.")
+                .accessibilityHint(voice.isDictating ? "Tap again when you're done" : "Tap to start, or hold while you talk")
             chargeLabel
             verdict
                 .padding(.horizontal, 20)
@@ -151,7 +161,7 @@ struct ContentView: View {
     @ViewBuilder private var activity: some View {
         if health.isAuthorized {
             ActivityGrid(steps: health.snapshot.steps, activeEnergy: health.snapshot.activeEnergyKcal,
-                         sleepWeek: sleepWeek, weights: weights)
+                         sleepWeek: sleepWeek, weights: weights) { loggingWeight = true }
         } else {
             VStack(alignment: .leading, spacing: 8) {
                 Button("Connect Apple Health") {
@@ -171,8 +181,19 @@ struct ContentView: View {
     @ViewBuilder private var plan: some View {
         if calendar.isAuthorized {
             SmartCalendar(allDay: calendar.events.filter(\.isAllDay).map { $0.title ?? "Untitled" },
-                          items: DayPlanner.plan(events: timedEvents, dayStart: dayStart, now: .now, bedtime: bedtimeDate),
-                          now: .now)
+                          items: DayPlanner.plan(events: DayPlanner.items(from: calendar.events),
+                                                 dayStart: dayStart, now: .now, bedtime: bedtimeDate,
+                                                 excluding: dismissed, trained: trainedToday,
+                                                 easyDay: energy?.band == .below),
+                          now: .now,
+                          accept: { calendar.add(title: $0.title, start: $0.start, end: $0.end) },
+                          dismiss: { item in
+                              DismissedSuggestions.add(item.title)
+                              withAnimation { dismissed = DismissedSuggestions.today() }
+                          })
+            if let error = calendar.errorMessage {
+                Text(error).font(.footnote).foregroundStyle(.red)
+            }
         } else {
             VStack(alignment: .leading, spacing: 8) {
                 Button("Connect Calendar") {
@@ -188,13 +209,6 @@ struct ContentView: View {
         }
     }
 
-    private var timedEvents: [PlanItem] {
-        calendar.events.filter { !$0.isAllDay }.map { event in
-            PlanItem(kind: .event, title: event.title ?? "Untitled", start: event.startDate, end: event.endDate,
-                     color: event.calendar.map { Color(cgColor: $0.cgColor) } ?? .accentColor)
-        }
-    }
-
     /// Your usual bedtime, tonight: where the forecast and the plan stop.
     private var bedtimeDate: Date {
         let (hour, minute) = notifications.bedtime
@@ -202,34 +216,14 @@ struct ContentView: View {
         return hour < 12 ? tonight.addingTimeInterval(86_400) : tonight    // after midnight: tomorrow
     }
 
-    /// Each reminder says why it is worth following, not just what to do.
-    @ViewBuilder private var remindersRows: some View {
-        ForEach(NotificationManager.Kind.allCases) { kind in
-            Toggle(isOn: Binding(get: { notifications.isOn(kind) },
-                                 set: { _ in Task { await notifications.toggle(kind) } })) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(kind.title)
-                    Text(kind.explanation)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .tint(BrandTitle.brand[1])
-        }
-        if notifications.permissionDenied {
-            Text("Notifications are turned off for myTwin. Turn them on in Settings.")
-                .font(.caption)
-                .foregroundStyle(.red)
-        } else if notifications.isOn(.bedtime) || notifications.isOn(.caffeine) {
-            Text("Timed against your usual bedtime of \(notifications.bedtimeText).")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
-
     /// Where today's charge started, from the morning prediction. The widget reads the same
     /// number (see TwinState), so the app and the widget always agree.
-    private var dayStart: Double { energyModel?.dayStart(for: energy) ?? DayCharge.unknownDay }
+    /// Until today's reading is worked out, the charge the widget and the app icon are
+    /// already showing: starting from a guess made the twin change colour a second in.
+    private var dayStart: Double {
+        guard let energy, let energyModel else { return TwinState.dayStart() }
+        return energyModel.dayStart(for: energy)
+    }
 
     /// Right now, as a fraction: the prediction sets the start, the clock drains it.
     private var charge: Double { DayCharge.remaining(from: dayStart, at: now) }
@@ -292,14 +286,24 @@ struct ContentView: View {
     }
 
     @ViewBuilder private var voiceBar: some View {
-        if let note = voice.statusNote {
-            Text(note)
-                .font(.footnote)
-                .foregroundStyle(voice.isAwake ? Color.accentColor : Color.secondary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-                .background(.bar)
+        VStack(spacing: 10) {
+            if voice.isDictating || chat.isResponding || calendar.pendingChange != nil {
+                InlineConversation(isListening: voice.isDictating, hint: voice.listeningHint,
+                                   isThinking: chat.isResponding, change: calendar.pendingChange,
+                                   confirm: chat.confirmChange, cancel: chat.cancelChange)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+            if let note = voice.statusNote {
+                Text(note)
+                    .font(.footnote)
+                    .foregroundStyle(voice.isAwake ? Color.accentColor : Color.secondary)
+                    .frame(maxWidth: .infinity)
+            }
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(.bar)
+        .animation(.snappy, value: chat.isResponding)
     }
 
     // MARK: - Actions
@@ -311,10 +315,32 @@ struct ContentView: View {
         Task { await updateEnergy() }
     }
 
-    /// Listens for "my twin" from the moment the app opens.
+    /// Tap Dash to talk and tap again when you're done, or hold him while you talk.
+    /// Either way, no pause ever cuts you off.
+    private func talk() {
+        guard !holding, Date.now.timeIntervalSince(heldUntil) > 0.4 else { return }  // that was a hold
+        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+        if voice.isDictating { voice.finishDictation() } else { voice.startDictation() }
+    }
+
+    /// Holding Dash listens for as long as you hold him.
+    private func startHolding() {
+        guard !holding else { return }
+        holding = true
+        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+        voice.startDictation(untilRelease: true)
+    }
+
+    private func stopHolding() {
+        guard holding else { return }
+        holding = false
+        heldUntil = .now
+        voice.finishDictation()
+    }
+
+    /// Listens for "twin" from the moment the app opens. Answers appear under Dash.
     private func listen() async {
         await voice.startLiveVoice { sentence in
-            showChat = true  // open the conversation so you can see what it heard
             guard !chat.isResponding else { return }
             Task { await chat.send(sentence) }
         }
@@ -339,15 +365,15 @@ struct ContentView: View {
         }
         coverage = await health.coverage(days: 90)
         weights = await health.weights()
-        await notifications.reschedule(bedtime: health.typicalBedtime(from: history))
+        await TwinRefresh.schedule(reading: energy, dayStart: dayStart,
+                                   bedtime: health.typicalBedtime(from: history),
+                                   calendar: calendar, trained: trainedToday, through: notifications)
     }
 
     /// Hands today's starting charge to the widget and puts the matching face on the app
     /// icon, so the app, the widget and the icon all show the same twin.
     private func shareMood() {
-        TwinState.save(dayStart: dayStart)
-        WidgetCenter.shared.reloadAllTimelines()
-        TwinIcon.show(mood)
+        TwinRefresh.share(dayStart: dayStart)
     }
 
     /// Wakes at the top of each hour, when the charge (and the mood) can change.

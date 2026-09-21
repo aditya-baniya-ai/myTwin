@@ -36,7 +36,9 @@ final class HealthManager {
         HKCategoryType(.sleepAnalysis),
     ]
     /// Added after launch. Kept apart so people who already connected are asked only about it.
-    private var readTypes: Set<HKObjectType> { coreTypes.union([HKQuantityType(.bodyMass)]) }
+    private var readTypes: Set<HKObjectType> {
+        coreTypes.union([HKQuantityType(.bodyMass), HKObjectType.workoutType()])
+    }
 
     func requestAuthorization() async {
         guard HKHealthStore.isHealthDataAvailable() else {
@@ -66,6 +68,57 @@ final class HealthManager {
         }
         isAuthorized = true
         await refresh()
+    }
+
+    /// Asks HealthKit to wake the app whenever new sleep, heart or weight data arrives,
+    /// so the twin is worked out before you open anything. Registered once at launch; iOS
+    /// then launches the app in the background to run `arrived`.
+    func watchForNewData(_ arrived: @escaping @Sendable () async -> Void) {
+        let watched: [HKSampleType] = [HKCategoryType(.sleepAnalysis),
+                                       HKQuantityType(.restingHeartRate),
+                                       HKQuantityType(.bodyMass)]
+        for type in watched {
+            store.enableBackgroundDelivery(for: type, frequency: .hourly) { _, _ in }
+            let observer = HKObserverQuery(sampleType: type, predicate: nil) { _, done, _ in
+                Task {
+                    await arrived()
+                    done()                  // tells iOS the wake-up is finished
+                }
+            }
+            store.execute(observer)
+        }
+    }
+
+    /// Saves a weigh-in to Apple Health, asking to write weight the first time.
+    func logWeight(pounds: Double, at date: Date = .now) async throws {
+        let type = HKQuantityType(.bodyMass)
+        if store.authorizationStatus(for: type) != .sharingAuthorized {
+            try await store.requestAuthorization(toShare: [type], read: readTypes)
+        }
+        guard store.authorizationStatus(for: type) == .sharingAuthorized else {
+            throw HealthError.cantSaveWeight
+        }
+        let quantity = HKQuantity(unit: .pound(), doubleValue: pounds)
+        try await store.save(HKQuantitySample(type: type, quantity: quantity, start: date, end: date))
+    }
+
+    enum HealthError: LocalizedError {
+        case cantSaveWeight
+        var errorDescription: String? {
+            "myTwin isn't allowed to save weight. Turn it on in Settings › Health › Data Access & Devices › myTwin."
+        }
+    }
+
+    /// Workouts recorded today, so the plan can tell whether you actually trained rather
+    /// than guessing from what's written in your calendar.
+    func workoutsToday() async -> [DateInterval] {
+        let start = Calendar.current.startOfDay(for: .now)
+        let descriptor = HKSampleQueryDescriptor(
+            predicates: [.workout(HKQuery.predicateForSamples(withStart: start, end: .now))],
+            sortDescriptors: [SortDescriptor(\.startDate)]
+        )
+        let workouts = (try? await descriptor.result(for: store)) ?? []
+        return workouts.map { DateInterval(start: $0.startDate, end: $0.endDate) }
     }
 
     /// Weigh-ins from the last `days` days, oldest first, in pounds.

@@ -36,6 +36,9 @@ struct TwinStage<Twin: View>: View {
 
     var body: some View {
         GeometryReader { geo in
+            // Nothing is drawn until the size is known: laying out against a width of zero
+            // put the twin at the left edge for a frame, and he visibly jumped to the middle.
+            if geo.size.width > 1, geo.size.height > 1 {
             let picture = geo.size.height / (1 + TwinFraming.platformRoom)
             let figure = picture / CGFloat(TwinFraming.margin)       // the character's height
             let feet = picture * CGFloat((1 + TwinFraming.headroom) / TwinFraming.margin)
@@ -47,6 +50,7 @@ struct TwinStage<Twin: View>: View {
                     .position(x: geo.size.width / 2, y: feet)
                 twin()
                     .frame(width: geo.size.width, height: picture)
+            }
             }
         }
     }

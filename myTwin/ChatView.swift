@@ -36,7 +36,7 @@ struct ChatView: View {
             ScrollView {
                 LazyVStack(spacing: 12) {
                     if chat.messages.isEmpty {
-                        Text("Say \"my twin\" to wake me, or type below.")
+                        Text("Say \"twin\" to wake me, or type below.")
                             .foregroundStyle(.secondary)
                             .padding(.top, 40)
                     }

@@ -88,6 +88,23 @@ final class CalendarManager {
                                       start: event.startDate, end: event.endDate))
     }
 
+    /// Saves a suggestion you accepted straight to your default calendar: swiping it and
+    /// tapping Add is the confirmation.
+    func add(title: String, start: Date, end: Date) {
+        guard isAuthorized else { errorMessage = noAccessText; return }
+        let event = EKEvent(eventStore: store)
+        event.title = title
+        event.startDate = start
+        event.endDate = end
+        event.calendar = store.defaultCalendarForNewEvents
+        do {
+            try store.save(event, span: .thisEvent)
+            loadTodayEvents()
+        } catch {
+            errorMessage = "Couldn't add \"\(title)\": \(error.localizedDescription)"
+        }
+    }
+
     // MARK: - Confirming changes
 
     /// Saves the pending change to the calendar. Returns a message for the chat.
