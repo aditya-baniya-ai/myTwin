@@ -17,6 +17,7 @@
 		000000000000000000000309 /* AvatarImages.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000205 /* AvatarImages.xcassets */; };
 		000000000000000000000310 /* TwinState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000206 /* TwinState.swift */; };
 		000000000000000000000311 /* TwinState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000206 /* TwinState.swift */; };
+		8C90D77330658E5500677FB6 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 000000000000000000000901 /* RevenueCat */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -82,6 +83,7 @@
 		000000000000000130000000 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
+				8C90D77330658E5500677FB6 /* RevenueCat in Frameworks */,
 			);
 		};
 		000000000000000230000000 /* Frameworks */ = {
@@ -164,6 +166,10 @@
 				000000000000000000000010 /* myTwin */,
 			);
 			name = myTwin;
+			packageProductDependencies = (
+				000000000000000000000901 /* RevenueCat */,
+				000000000000000000000902 /* RevenueCatUI */,
+			);
 			productName = MyApp;
 			productReference = 000000000000000000000120 /* myTwin.app */;
 			productType = "com.apple.product-type.application";
@@ -210,6 +216,9 @@
 			);
 			mainGroup = 000000000000000000000001;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				000000000000000000000900 /* XCRemoteSwiftPackageReference "purchases-ios" */,
+			);
 			preferredProjectObjectVersion = 90;
 			productRefGroup = 000000000000000000000020 /* Products */;
 			projectDirPath = "";
@@ -583,6 +592,30 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		000000000000000000000900 /* XCRemoteSwiftPackageReference "purchases-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/RevenueCat/purchases-ios.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.91.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		000000000000000000000901 /* RevenueCat */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 000000000000000000000900 /* XCRemoteSwiftPackageReference "purchases-ios" */;
+			productName = RevenueCat;
+		};
+		000000000000000000000902 /* RevenueCatUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 000000000000000000000900 /* XCRemoteSwiftPackageReference "purchases-ios" */;
+			productName = RevenueCatUI;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 000000000000000000000000 /* Project object */;
 }

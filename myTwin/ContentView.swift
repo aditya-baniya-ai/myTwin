@@ -13,6 +13,10 @@ struct ContentView: View {
     @State private var gemini: GeminiAccess
 
     @State private var tab: TwinTab = .twin
+    @State private var planSpan: PlanSpan = .day
+    @State private var pro = Subscription()
+    @State private var showPaywall = false
+    @State private var showCustomerCentre = false
     @State private var showChat = false
     @State private var askGemini = false
     /// Moved on at the top of each hour, when the drain curve and the widget move on.
@@ -30,10 +34,6 @@ struct ContentView: View {
     @State private var workoutDetails: [WorkoutDetail] = []
     @State private var loggingWeight = false
     @State private var dismissed = DismissedSuggestions.today()
-    /// Your finger is down on Dash: listening lasts as long as you hold him.
-    @State private var holding = false
-    /// When the last hold ended, so letting go doesn't also count as a tap.
-    @State private var heldUntil = Date.distantPast
 
     private let energyModel = EnergyModel()
 
@@ -66,7 +66,6 @@ struct ContentView: View {
             .scrollTargetBehavior(.paging)
             .scrollPosition(id: swiped)
             .scrollIndicators(.hidden)
-            .flowsBetweenTabs($tab)
             .background { BatteryBackdrop(energy: charge * 100) }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -89,15 +88,22 @@ struct ContentView: View {
             .safeAreaInset(edge: .bottom) { bottomBar }
             .task {
                 askGemini = gemini.needsAnswer      // once; the answer is remembered
+                await pro.start()
                 await health.refreshAuthorizationState()
                 calendar.loadTodayEvents()
+                calendar.loadWeekEvents()
                 await updateEnergy()
                 await listen()
             }
             .task { await followTheHours() }
+            .task { await pro.watchForChanges() }
+            .onChange(of: pro.isPro, initial: true) { chat.proEnabled = pro.isPro }
+            .sheet(isPresented: $showPaywall) { ProPaywall(pro: pro) }
+            .sheet(isPresented: $showCustomerCentre) { ProCustomerCentre() }
             .refreshable {
                 await health.refresh()
                 calendar.loadTodayEvents()
+                calendar.loadWeekEvents()
                 await updateEnergy()
             }
             // Don't hold the microphone while the app is in the background.
@@ -142,18 +148,24 @@ struct ContentView: View {
     }
 
     /// Dash himself, how charged he is, and one line about the day as it stands.
-    /// Now also shows summary cards for predictions, activity, plan, and connections
-    /// so all primary info lives on the main page.
+    /// Everything worth a glance under Dash: the forecast, today's numbers, what he
+    /// suggests changing, and what he's connected to. Only the calendar is cut down — the
+    /// whole day lives on the Plan page.
     private var twinPage: some View {
         ScrollView {
             VStack(spacing: 18) {
                 twinContent
                     .containerRelativeFrame(.vertical)    // avatar fills the first screen
 
-                // -- Summary cards: all key info on the main dashboard --
-
-                tabLink("Predictions", tab: .predictions) {
-                    PredictionsCard(points: DayCharge.forecast(from: dayStart, until: bedtimeDate))
+                if pro.isPro {
+                    tabLink("Predictions", tab: .predictions) {
+                        PredictionsCard(points: DayCharge.forecast(from: dayStart, until: bedtimeDate))
+                    }
+                } else {
+                    LockedCard(title: "Your energy, hour by hour",
+                               detail: "See where your peak lands and when the dip hits, before the day starts.") {
+                        showPaywall = true
+                    }
                 }
 
                 if health.isAuthorized {
@@ -164,12 +176,66 @@ struct ContentView: View {
                     }
                 }
 
-                tabLink("Plan", tab: .plan) { plan }
+                suggestedChanges                          // the calendar, in brief
 
                 tabLink("Connections", tab: .you) { connections }
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 20)
+        }
+    }
+
+    /// Today's suggestions in brief, with a way through to the calendar itself.
+    private var suggestedChanges: some View {
+        let today = DayPlanner.plan(events: DayPlanner.items(from: calendar.events), dayStart: dayStart,
+                                    now: .now, bedtime: bedtimeDate, excluding: dismissed,
+                                    trained: trainedToday, easyDay: energy?.band == .below)
+        let suggestions = pro.isPro ? today.filter { $0.kind == .suggestion } : []
+        return VStack(alignment: .leading, spacing: 10) {
+            Text("Suggested changes")
+                .font(.title3.weight(.bold))
+                .padding(.leading, 4)
+            if !pro.isPro {
+                LockedCard(title: "Plans that fit your day",
+                           detail: "A workout in your strongest free hour, a nap at the dip, the last coffee that still clears before bed.") {
+                    showPaywall = true
+                }
+            }
+            VStack(spacing: 12) {
+                if !pro.isPro {
+                    EmptyView()
+                } else if suggestions.isEmpty {
+                    Text("Nothing to change today.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    ForEach(suggestions) { item in
+                        HStack(spacing: 10) {
+                            Image(systemName: item.symbol).foregroundStyle(item.color)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(item.title).font(.subheadline.weight(.semibold))
+                                Text(timeRangeText(item.start, item.end))
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                    }
+                }
+                Divider()
+                Button {
+                    withAnimation(.snappy) { tab = .plan }
+                } label: {
+                    HStack {
+                        Text("See your full calendar").font(.subheadline.weight(.medium))
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.caption.weight(.semibold))
+                    }
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(BrandTitle.brand[1])
+            }
+            .dashboardCard()
         }
     }
 
@@ -179,11 +245,13 @@ struct ContentView: View {
                 .padding(.top, 20)
             Avatar3DView(energy: charge * 100)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)     // whatever is left
-                .overlay { if voice.isDictating { ListeningRing() } }
+                .background { if voice.isDictating { ListeningGlow() } }
+                .scaleEffect(voice.isDictating ? 1.03 : 1)            // he lifts while listening
+                .offset(y: voice.isDictating ? -10 : 0)
+                .animation(.spring(response: 0.45, dampingFraction: 0.7), value: voice.isDictating)
                 .onTapGesture(perform: talk)
-                .gesture(HoldToTalk(began: startHolding, ended: stopHolding))
                 .accessibilityLabel("Your twin, \(Int(charge * 100)) percent charged. Tap to talk.")
-                .accessibilityHint(voice.isDictating ? "Tap again when you're done" : "Tap to start, or hold while you talk")
+                .accessibilityHint(voice.isDictating ? "Tap again when you're done" : "Tap to start listening")
             chargeLabel
             verdict
                 .padding(.horizontal, 20)
@@ -200,7 +268,14 @@ struct ContentView: View {
 
     private var predictionsPage: some View {
         page("Predictions", tab: .predictions) {
-            PredictionsCard(points: DayCharge.forecast(from: dayStart, until: bedtimeDate))
+            if pro.isPro {
+                PredictionsCard(points: DayCharge.forecast(from: dayStart, until: bedtimeDate))
+            } else {
+                LockedCard(title: "Your energy, hour by hour",
+                           detail: "See where your peak lands and when the dip hits, before the day starts.") {
+                    showPaywall = true
+                }
+            }
             if health.isAuthorized, todayFeatures != nil, !diary.ratedToday() {
                 ratingRow.dashboardCard()
             }
@@ -220,12 +295,36 @@ struct ContentView: View {
     }
 
     private var planPage: some View {
-        page("Today's plan", tab: .plan) { plan }
+        page("Plan", tab: .plan) {
+            Picker("Plan", selection: $planSpan) {
+                Text("Day").tag(PlanSpan.day)
+                Text("Week").tag(PlanSpan.week)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            if planSpan == .day { plan } else { weekPlan }
+        }
+    }
+
+    /// Today in detail, or the week at a glance.
+    private enum PlanSpan { case day, week }
+
+    private var weekPlan: some View {
+        let days = Calendar.current
+        let start = days.startOfDay(for: .now)
+        let week = (0..<7).map { ahead -> (date: Date, allDay: [String], events: [PlanItem]) in
+            let day = days.date(byAdding: .day, value: ahead, to: start) ?? start
+            let onThatDay = calendar.week.filter { days.isDate($0.startDate, inSameDayAs: day) }
+            return (day, onThatDay.filter(\.isAllDay).map { $0.title ?? "Untitled" },
+                    DayPlanner.items(from: onThatDay))
+        }
+        return WeekPlan(days: week)
     }
 
     /// What myTwin is connected to and what it can actually read.
     private var youPage: some View {
         page("You", tab: .you) {
+            proRow
             connections
             if health.isAuthorized {
                 DashboardSection(title: "What myTwin can read") {
@@ -236,6 +335,32 @@ struct ContentView: View {
                 Text(error).font(.footnote).foregroundStyle(.red)
             }
         }
+    }
+
+    /// Your plan: the paywall when you don't have Pro, RevenueCat's Customer Center when you do.
+    private var proRow: some View {
+        Button {
+            if pro.isPro { showCustomerCentre = true } else { showPaywall = true }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: pro.isPro ? "bolt.heart.fill" : "lock.fill")
+                    .font(.title3)
+                    .foregroundStyle(BrandTitle.brand[1])
+                    .frame(width: 26)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(pro.isPro ? "myTwin Pro" : "Get myTwin Pro")
+                        .font(.subheadline.weight(.semibold))
+                    Text(pro.isPro ? "Manage or restore your plan"
+                                   : "The forecast, the plans, and Dash's full voice")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            }
+            .dashboardCard()
+        }
+        .buttonStyle(.plain)
     }
 
     /// The same frame around every page but Dash's: a title, then cards.
@@ -348,14 +473,20 @@ struct ContentView: View {
         }
     }
 
+    /// The day's rows: your own events always, suggestions only with Pro.
+    private var planItems: [PlanItem] {
+        let full = DayPlanner.plan(events: DayPlanner.items(from: calendar.events),
+                                   dayStart: dayStart, now: .now, bedtime: bedtimeDate,
+                                   excluding: dismissed, trained: trainedToday,
+                                   easyDay: energy?.band == .below)
+        return pro.isPro ? full : full.filter { $0.kind == .event }
+    }
+
     /// Today's events with suggestions in the free time, or the button to connect the calendar.
     @ViewBuilder private var plan: some View {
         if calendar.isAuthorized {
             SmartCalendar(allDay: calendar.events.filter(\.isAllDay).map { $0.title ?? "Untitled" },
-                          items: DayPlanner.plan(events: DayPlanner.items(from: calendar.events),
-                                                 dayStart: dayStart, now: .now, bedtime: bedtimeDate,
-                                                 excluding: dismissed, trained: trainedToday,
-                                                 easyDay: energy?.band == .below),
+                          items: planItems,
                           now: .now,
                           accept: { calendar.add(title: $0.title, start: $0.start, end: $0.end) },
                           dismiss: { item in
@@ -410,32 +541,18 @@ struct ContentView: View {
 
     @ViewBuilder private var verdict: some View {
         if let energy {
-            VStack(spacing: 4) {
-                Text(energy.headline)
-                    .font(.title3.weight(.semibold))
-                    .multilineTextAlignment(.center)
-                Text(energy.explanation)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            .transition(.opacity.combined(with: .move(edge: .bottom)))
+            Text(energy.headline)
+                .font(.title3.weight(.semibold))
+                .multilineTextAlignment(.center)
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
         } else if !health.isAuthorized {
-            Text("Connect Apple Health to see how today compares with your normal.")
+            Text("Connect Apple Health")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
         } else {
-            VStack(spacing: 4) {
-                Text(nightsFound == 0
-                     ? "No nights with sleep or heart data found\(searchedDays > 0 ? " in the last \(searchedDays) days" : "")."
-                     : "Found \(nightsFound) night\(nightsFound == 1 ? "" : "s") of data in the last \(searchedDays) days.")
-                    .font(.footnote)
-                Text("myTwin needs at least \(EnergyModel.minimumNights) to compare today with your normal.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-            .multilineTextAlignment(.center)
+            Text("Not enough sleep data yet")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -495,27 +612,11 @@ struct ContentView: View {
         Task { await updateEnergy() }
     }
 
-    /// Tap Dash to talk and tap again when you're done, or hold him while you talk.
-    /// Either way, no pause ever cuts you off.
+    /// Tap Dash to talk, tap again when you're done. No pause cuts you off, and if you
+    /// walk away it stops by itself.
     private func talk() {
-        guard !holding, Date.now.timeIntervalSince(heldUntil) > 0.4 else { return }  // that was a hold
         UIImpactFeedbackGenerator(style: .soft).impactOccurred()
         if voice.isDictating { voice.finishDictation() } else { voice.startDictation() }
-    }
-
-    /// Holding Dash listens for as long as you hold him.
-    private func startHolding() {
-        guard !holding else { return }
-        holding = true
-        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-        voice.startDictation(untilRelease: true)
-    }
-
-    private func stopHolding() {
-        guard holding else { return }
-        holding = false
-        heldUntil = .now
-        voice.finishDictation()
     }
 
     /// Listens for "twin" from the moment the app opens. Answers appear under Dash.
@@ -558,14 +659,13 @@ struct ContentView: View {
         TwinRefresh.share(dayStart: dayStart)
     }
 
-    /// Wakes at the top of each hour, when the charge (and the mood) can change.
+    /// Wakes at the top of each hour, when the charge changes.
     private func followTheHours() async {
         while !Task.isCancelled {
             let nextHour = Calendar.current.nextDate(after: .now, matching: DateComponents(minute: 0),
                                                      matchingPolicy: .nextTime) ?? .now.addingTimeInterval(3600)
             try? await Task.sleep(for: .seconds(max(nextHour.timeIntervalSinceNow, 1)))
             now = .now
-            TwinIcon.show(mood)
         }
     }
 }

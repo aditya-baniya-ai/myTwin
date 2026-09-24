@@ -14,6 +14,8 @@ struct ChatMessage: Identifiable {
 final class ChatManager {
     var messages: [ChatMessage] = []
     var isResponding = false
+    /// Gemini is part of Pro; without it Dash answers from the model on the iPhone.
+    var proEnabled = false
     let calendar: CalendarManager
     let gemini: GeminiAccess
 
@@ -54,7 +56,7 @@ final class ChatManager {
         isResponding = true
         defer { isResponding = false }
 
-        if gemini.isActive, await answerWithGemini(text) { return }
+        if proEnabled, gemini.isActive, await answerWithGemini(text) { return }
 
         let reply: String
         do {

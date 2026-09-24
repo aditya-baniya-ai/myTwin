@@ -5,5 +5,8 @@
 	<!-- Filled in at build time from GEMINI_API_KEY in Config/Secrets.xcconfig. -->
 	<key>GeminiAPIKey</key>
 	<string>$(GEMINI_API_KEY)</string>
+	<!-- RevenueCat's public SDK key, from Config/Base.xcconfig. -->
+	<key>RevenueCatAPIKey</key>
+	<string>$(REVENUECAT_API_KEY)</string>
 </dict>
 </plist>

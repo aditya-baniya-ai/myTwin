@@ -3,3 +3,7 @@
 // The Gemini API key lives in Secrets.xcconfig next to this file. That file is never
 // committed (see .gitignore); without it the app builds fine and simply never uses Gemini.
 #include? "Secrets.xcconfig"
+
+// RevenueCat's public SDK key. Safe in source: it only identifies the app, and the paywall
+// needs it to load. Swap for the platform key when shipping to a real store.
+REVENUECAT_API_KEY = test_fuhyMyWAvAfpDqBMfOPPMbqqFwk
