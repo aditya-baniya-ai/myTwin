@@ -10,6 +10,8 @@ struct Avatar3DView: View {
     let energy: Double
 
     @State private var controller = AvatarAnimationController()
+    /// Where the last spin drag had got to, so each step is the movement since the last.
+    @State private var spunTo: CGFloat = 0
     /// The model is on screen. Until then the stage stays empty rather than showing a
     /// stand-in: the old still was lit and framed differently, so Dash appeared to change
     /// character and jump to the middle the moment the real model arrived.
@@ -39,6 +41,7 @@ struct Avatar3DView: View {
             content.add(room)
             AvatarLighting.light(avatar.model, from: room)
             content.add(controller.stage(avatar))
+            controller.addGrabBox()          // so a drag on him spins, and a drag past him pages
             content.add(Self.camera(framing: controller.height))
             for light in Self.lights(around: controller.height) {
                 content.add(light)
@@ -58,7 +61,21 @@ struct Avatar3DView: View {
         }
         .opacity(ready ? 1 : 0)
         .animation(.easeIn(duration: 0.45), value: ready)
-        .gesture(HorizontalPan(changed: controller.drag, ended: controller.release))
+        // Targeted at Dash himself: a drag on him spins him, a drag anywhere else is left
+        // for the page swipe.
+        .gesture(
+            DragGesture()
+                .targetedToAnyEntity()
+                .onChanged { drag in
+                    let step = drag.gestureValue.translation.width - spunTo
+                    spunTo = drag.gestureValue.translation.width
+                    controller.drag(by: step)
+                }
+                .onEnded { drag in
+                    spunTo = 0
+                    controller.release(velocity: drag.gestureValue.velocity.width)
+                }
+        )
     }
 
     private static let roomName = "Room"

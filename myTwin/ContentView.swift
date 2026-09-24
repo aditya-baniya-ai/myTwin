@@ -12,6 +12,7 @@ struct ContentView: View {
     @State private var notifications = NotificationManager()
     @State private var gemini: GeminiAccess
 
+    @State private var tab: TwinTab = .twin
     @State private var showChat = false
     @State private var askGemini = false
     /// Moved on at the top of each hour, when the drain curve and the widget move on.
@@ -26,6 +27,7 @@ struct ContentView: View {
     @State private var weights: [WeightSample] = []
     /// Apple Health has a workout recorded today, so the plan stops suggesting one.
     @State private var trainedToday = false
+    @State private var workoutDetails: [WorkoutDetail] = []
     @State private var loggingWeight = false
     @State private var dismissed = DismissedSuggestions.today()
     /// Your finger is down on Dash: listening lasts as long as you hold him.
@@ -51,34 +53,20 @@ struct ContentView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 26) {
-                    header
-                    Group {
-                        DashboardSection(title: "Predictions") {
-                            PredictionsCard(points: DayCharge.forecast(from: dayStart, until: bedtimeDate))
-                        }
-                        DashboardSection(title: "Today's activity") { activity }
-                        DashboardSection(title: "Today's plan") { plan }
-                        if health.isAuthorized, todayFeatures != nil, !diary.ratedToday() {
-                            ratingRow.dashboardCard()
-                        }
-                        if health.isAuthorized, !week.isEmpty {
-                            DashboardSection(title: "Your last 7 days") { WeekStrip(days: week).dashboardCard() }
-                        }
-                        if health.isAuthorized {
-                            DashboardSection(title: "What myTwin can read") {
-                                CoverageSection(coverage: coverage, windowDays: 90).dashboardCard()
-                            }
-                        }
-                        if let error = health.errorMessage {
-                            Text(error).foregroundStyle(.red)
-                        }
+            ScrollView(.horizontal) {
+                HStack(spacing: 0) {
+                    ForEach(TwinTab.allCases) { page in
+                        view(for: page)
+                            .containerRelativeFrame(.horizontal)
+                            .id(page)
                     }
-                    .padding(.horizontal, 16)
                 }
-                .padding(.bottom, 24)
+                .scrollTargetLayout()
             }
+            .scrollTargetBehavior(.paging)
+            .scrollPosition(id: swiped)
+            .scrollIndicators(.hidden)
+            .flowsBetweenTabs($tab)
             .background { BatteryBackdrop(energy: charge * 100) }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -90,7 +78,6 @@ struct ContentView: View {
                 LogWeightSheet(last: weights.last?.pounds) { pounds in
                     try await health.logWeight(pounds: pounds)
                     weights = await health.weights()
-        trainedToday = await !health.workoutsToday().isEmpty
                 }
             }
             .sheet(isPresented: $askGemini) {
@@ -99,7 +86,7 @@ struct ContentView: View {
             .navigationDestination(isPresented: $showChat) {
                 ChatView(chat: chat, voice: voice)
             }
-            .safeAreaInset(edge: .bottom) { voiceBar }
+            .safeAreaInset(edge: .bottom) { bottomBar }
             .task {
                 askGemini = gemini.needsAnswer      // once; the answer is remembered
                 await health.refreshAuthorizationState()
@@ -137,13 +124,61 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Pieces of the screen
+    // MARK: - The five pages
 
-    private var header: some View {
+    /// The page you have swiped to. Tapping the bar sets it, which scrolls there.
+    private var swiped: Binding<TwinTab?> {
+        Binding(get: { tab }, set: { if let page = $0 { tab = page } })
+    }
+
+    @ViewBuilder private func view(for page: TwinTab) -> some View {
+        switch page {
+        case .twin: twinPage
+        case .predictions: predictionsPage
+        case .activity: activityPage
+        case .plan: planPage
+        case .you: youPage
+        }
+    }
+
+    /// Dash himself, how charged he is, and one line about the day as it stands.
+    /// Now also shows summary cards for predictions, activity, plan, and connections
+    /// so all primary info lives on the main page.
+    private var twinPage: some View {
+        ScrollView {
+            VStack(spacing: 18) {
+                twinContent
+                    .containerRelativeFrame(.vertical)    // avatar fills the first screen
+
+                // -- Summary cards: all key info on the main dashboard --
+
+                tabLink("Predictions", tab: .predictions) {
+                    PredictionsCard(points: DayCharge.forecast(from: dayStart, until: bedtimeDate))
+                }
+
+                if health.isAuthorized {
+                    tabLink("Activity", tab: .activity) {
+                        ActivityGrid(steps: health.snapshot.steps,
+                                     activeEnergy: health.snapshot.activeEnergyKcal,
+                                     sleepWeek: sleepWeek, weights: weights) { loggingWeight = true }
+                    }
+                }
+
+                tabLink("Plan", tab: .plan) { plan }
+
+                tabLink("Connections", tab: .you) { connections }
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 20)
+        }
+    }
+
+    private var twinContent: some View {
         VStack(spacing: 10) {
             BrandTitle()
+                .padding(.top, 20)
             Avatar3DView(energy: charge * 100)
-                .containerRelativeFrame(.vertical) { height, _ in max(height * 0.7, 320) }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)     // whatever is left
                 .overlay { if voice.isDictating { ListeningRing() } }
                 .onTapGesture(perform: talk)
                 .gesture(HoldToTalk(began: startHolding, ended: stopHolding))
@@ -152,10 +187,146 @@ struct ContentView: View {
             chargeLabel
             verdict
                 .padding(.horizontal, 20)
+            Text(DayGreeting.line(charge: charge, reading: energy, next: nextEvent,
+                                  dayStart: dayStart, healthConnected: health.isAuthorized,
+                                  userName: UserProfile().firstName))
+                .font(.subheadline.weight(.medium))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 4)
         }
         .frame(maxWidth: .infinity)
-        .padding(.top, 44)      // room above for the title's glow
     }
+
+    private var predictionsPage: some View {
+        page("Predictions", tab: .predictions) {
+            PredictionsCard(points: DayCharge.forecast(from: dayStart, until: bedtimeDate))
+            if health.isAuthorized, todayFeatures != nil, !diary.ratedToday() {
+                ratingRow.dashboardCard()
+            }
+            if health.isAuthorized, !week.isEmpty {
+                DashboardSection(title: "Your last 7 days") { WeekStrip(days: week).dashboardCard() }
+            }
+        }
+    }
+
+    private var activityPage: some View {
+        page("Today's activity", tab: .activity) {
+            activity
+            if health.isAuthorized {
+                ActivityDetail(snapshot: health.snapshot, workouts: workoutDetails)
+            }
+        }
+    }
+
+    private var planPage: some View {
+        page("Today's plan", tab: .plan) { plan }
+    }
+
+    /// What myTwin is connected to and what it can actually read.
+    private var youPage: some View {
+        page("You", tab: .you) {
+            connections
+            if health.isAuthorized {
+                DashboardSection(title: "What myTwin can read") {
+                    CoverageSection(coverage: coverage, windowDays: 90).dashboardCard()
+                }
+            }
+            if let error = health.errorMessage {
+                Text(error).font(.footnote).foregroundStyle(.red)
+            }
+        }
+    }
+
+    /// The same frame around every page but Dash's: a title, then cards.
+    private func page<Content: View>(_ title: String, tab pageTab: TwinTab, @ViewBuilder content: () -> Content) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                Text(title)
+                    .font(.largeTitle.bold())
+                    .padding(.leading, 4)
+                content()
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            .padding(.bottom, 20)
+        }
+    }
+
+    /// A tappable summary section on the main dashboard. Tapping it switches to the
+    /// corresponding detail tab so users can explore more.
+    private func tabLink<Content: View>(_ title: String, tab destination: TwinTab,
+                                        @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(title)
+                    .font(.title3.weight(.bold))
+                    .padding(.leading, 4)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            content()
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            withAnimation(.snappy(duration: 0.3)) { tab = destination }
+        }
+    }
+
+    /// Where today's numbers come from, and whether each source is switched on.
+    @ViewBuilder private var connections: some View {
+        VStack(spacing: 14) {
+            source("Apple Health", symbol: "heart.fill", tint: .pink,
+                   state: health.isAuthorized ? "Connected" : "Not connected",
+                   detail: "Sleep, heart rate, steps, workouts and weight") {
+                Task { await health.requestAuthorization(); await updateEnergy() }
+            }
+            Divider()
+            source("Calendar", symbol: "calendar", tint: .blue,
+                   state: calendar.isAuthorized ? "Connected" : "Not connected",
+                   detail: "Today's events, so the plan fits around them") {
+                Task { await calendar.requestAccess() }
+            }
+            Divider()
+            source("Gemini", symbol: "sparkles", tint: BrandTitle.brand[1],
+                   state: gemini.allowed == true ? (gemini.isOnline ? "On, and online" : "On, offline just now")
+                                                 : "Off, answers stay on your iPhone",
+                   detail: "Smarter answers when you're online", action: nil)
+        }
+        .dashboardCard()
+    }
+
+    private func source(_ name: String, symbol: String, tint: Color, state: String, detail: String,
+                        action: (() -> Void)?) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: symbol)
+                .foregroundStyle(tint)
+                .frame(width: 24)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name).font(.subheadline.weight(.semibold))
+                Text(state).font(.caption).foregroundStyle(.secondary)
+                Text(detail).font(.caption2).foregroundStyle(.tertiary)
+            }
+            Spacer(minLength: 0)
+            if let action, state.hasPrefix("Not") {
+                Button("Connect", action: action)
+                    .buttonStyle(.bordered)
+                    .tint(tint)
+            }
+        }
+    }
+
+    /// The next thing on the calendar, which is usually what you want to know.
+    private var nextEvent: (title: String, start: Date)? {
+        calendar.events
+            .filter { !$0.isAllDay && $0.startDate > .now }
+            .min { $0.startDate < $1.startDate }
+            .map { ($0.title ?? "Your next event", $0.startDate) }
+    }
+
+    // MARK: - Pieces of the screen
 
     /// Steps, energy, sleep and weight, or the button to connect Apple Health.
     @ViewBuilder private var activity: some View {
@@ -285,7 +456,7 @@ struct ContentView: View {
         .padding(.vertical, 4)
     }
 
-    @ViewBuilder private var voiceBar: some View {
+    @ViewBuilder private var bottomBar: some View {
         VStack(spacing: 10) {
             if voice.isDictating || chat.isResponding || calendar.pendingChange != nil {
                 InlineConversation(isListening: voice.isDictating, hint: voice.listeningHint,
@@ -293,16 +464,25 @@ struct ContentView: View {
                                    confirm: chat.confirmChange, cancel: chat.cancelChange)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-            if let note = voice.statusNote {
+            if let note = voice.statusNote, tab == .twin {
                 Text(note)
-                    .font(.footnote)
+                    .font(.caption)
                     .foregroundStyle(voice.isAwake ? Color.accentColor : Color.secondary)
                     .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 16)
             }
+            TwinTabBar(tab: $tab)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background(.bar)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
+        .background {
+            // Anything scrolling underneath fades out rather than colliding with the bar.
+            LinearGradient(colors: [.clear, Color(.systemBackground).opacity(0.55),
+                                    Color(.systemBackground).opacity(0.8)],
+                           startPoint: .top, endPoint: .bottom)
+                .allowsHitTesting(false)
+                .ignoresSafeArea()
+        }
         .animation(.snappy, value: chat.isResponding)
     }
 
@@ -365,6 +545,8 @@ struct ContentView: View {
         }
         coverage = await health.coverage(days: 90)
         weights = await health.weights()
+        trainedToday = await !health.workoutsToday().isEmpty
+        workoutDetails = await health.workoutDetails()
         await TwinRefresh.schedule(reading: energy, dayStart: dayStart,
                                    bedtime: health.typicalBedtime(from: history),
                                    calendar: calendar, trained: trainedToday, through: notifications)

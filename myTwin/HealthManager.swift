@@ -9,6 +9,21 @@ struct HealthSnapshot {
     var sleepHours: Double?        // asleep time last night (6pm → noon)
     var steps: Double?             // today so far
     var activeEnergyKcal: Double?  // today so far
+
+    // -- Extended metrics for the Activity detail tab --
+    var heartRate: Double?         // latest heart rate, bpm
+    var flightsClimbed: Double?    // flights today
+    var distanceKm: Double?        // walking + running distance today, km
+    var standHours: Int?           // stand hours today
+    var mindfulMinutes: Double?    // mindful minutes today
+    var vo2Max: Double?            // most recent VO₂ max, mL/kg/min
+    var dietaryEnergy: Double?     // kcal consumed today (MyFitnessPal etc.)
+    var protein: Double?           // grams today
+    var carbs: Double?             // grams today
+    var fat: Double?               // grams today
+    var sugar: Double?             // grams today
+    var fiber: Double?             // grams today
+    var water: Double?             // litres today
 }
 
 /// One weigh-in from Apple Health.
@@ -16,6 +31,17 @@ struct WeightSample: Identifiable {
     let date: Date
     let pounds: Double
     var id: Date { date }
+}
+
+/// A workout recorded today, with enough detail to display.
+struct WorkoutDetail: Identifiable {
+    let id: UUID
+    let type: String
+    let start: Date
+    let end: Date
+    let durationMinutes: Double
+    let caloriesBurned: Double?
+    let distanceKm: Double?
 }
 
 @MainActor
@@ -35,9 +61,25 @@ final class HealthManager {
         HKQuantityType(.activeEnergyBurned),
         HKCategoryType(.sleepAnalysis),
     ]
-    /// Added after launch. Kept apart so people who already connected are asked only about it.
+    /// All the types the app can read, including extended metrics.
     private var readTypes: Set<HKObjectType> {
-        coreTypes.union([HKQuantityType(.bodyMass), HKObjectType.workoutType()])
+        coreTypes.union([
+            HKQuantityType(.bodyMass),
+            HKObjectType.workoutType(),
+            HKQuantityType(.heartRate),
+            HKQuantityType(.flightsClimbed),
+            HKQuantityType(.distanceWalkingRunning),
+            HKQuantityType(.appleStandTime),
+            HKQuantityType(.vo2Max),
+            HKCategoryType(.mindfulSession),
+            HKQuantityType(.dietaryEnergyConsumed),
+            HKQuantityType(.dietaryProtein),
+            HKQuantityType(.dietaryCarbohydrates),
+            HKQuantityType(.dietaryFatTotal),
+            HKQuantityType(.dietarySugar),
+            HKQuantityType(.dietaryFiber),
+            HKQuantityType(.dietaryWater),
+        ])
     }
 
     func requestAuthorization() async {
@@ -121,6 +163,85 @@ final class HealthManager {
         return workouts.map { DateInterval(start: $0.startDate, end: $0.endDate) }
     }
 
+    /// Today's workouts with full details for the Activity detail tab.
+    func workoutDetails() async -> [WorkoutDetail] {
+        let start = Calendar.current.startOfDay(for: .now)
+        let descriptor = HKSampleQueryDescriptor(
+            predicates: [.workout(HKQuery.predicateForSamples(withStart: start, end: .now))],
+            sortDescriptors: [SortDescriptor(\.startDate)]
+        )
+        let workouts = (try? await descriptor.result(for: store)) ?? []
+        return workouts.map { w in
+            WorkoutDetail(
+                id: w.uuid,
+                type: Self.workoutName(w.workoutActivityType),
+                start: w.startDate,
+                end: w.endDate,
+                durationMinutes: w.duration / 60,
+                caloriesBurned: w.totalEnergyBurned?.doubleValue(for: .kilocalorie()),
+                distanceKm: w.totalDistance?.doubleValue(for: .meterUnit(with: .kilo))
+            )
+        }
+    }
+
+    /// Human-readable name for common workout types.
+    private static func workoutName(_ type: HKWorkoutActivityType) -> String {
+        switch type {
+        case .running: "Running"
+        case .walking: "Walking"
+        case .cycling: "Cycling"
+        case .swimming: "Swimming"
+        case .yoga: "Yoga"
+        case .functionalStrengthTraining: "Strength Training"
+        case .traditionalStrengthTraining: "Strength Training"
+        case .highIntensityIntervalTraining: "HIIT"
+        case .hiking: "Hiking"
+        case .elliptical: "Elliptical"
+        case .rowing: "Rowing"
+        case .dance: "Dance"
+        case .pilates: "Pilates"
+        case .coreTraining: "Core Training"
+        case .crossTraining: "Cross Training"
+        case .stairClimbing: "Stair Climbing"
+        case .mixedCardio: "Cardio"
+        case .cooldown: "Cooldown"
+        default: "Workout"
+        }
+    }
+
+    /// Count of today's mindful-session minutes.
+    func mindfulMinutesToday() async -> Double? {
+        let start = Calendar.current.startOfDay(for: .now)
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: .now)
+        let descriptor = HKSampleQueryDescriptor(
+            predicates: [.categorySample(type: HKCategoryType(.mindfulSession), predicate: predicate)],
+            sortDescriptors: [SortDescriptor(\.startDate)]
+        )
+        guard let samples = try? await descriptor.result(for: store), !samples.isEmpty else { return nil }
+        return samples.reduce(0) { $0 + $1.endDate.timeIntervalSince($1.startDate) } / 60
+    }
+
+    /// Count of stand hours today (hours where stand time > 0).
+    func standHoursToday() async -> Int? {
+        let cal = Calendar.current
+        let start = cal.startOfDay(for: .now)
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: .now)
+        let descriptor = HKStatisticsCollectionQueryDescriptor(
+            predicate: .quantitySample(type: HKQuantityType(.appleStandTime), predicate: predicate),
+            options: .cumulativeSum,
+            anchorDate: start,
+            intervalComponents: DateComponents(hour: 1)
+        )
+        guard let collection = try? await descriptor.result(for: store) else { return nil }
+        var count = 0
+        collection.enumerateStatistics(from: start, to: .now) { stats, _ in
+            if let minutes = stats.sumQuantity()?.doubleValue(for: .minute()), minutes > 0 {
+                count += 1
+            }
+        }
+        return count > 0 ? count : nil
+    }
+
     /// Weigh-ins from the last `days` days, oldest first, in pounds.
     func weights(days: Int = 90) async -> [WeightSample] {
         let start = Calendar.current.date(byAdding: .day, value: -days, to: .now) ?? .now
@@ -156,6 +277,7 @@ final class HealthManager {
         let dayAgo = now.addingTimeInterval(-86_400)
         let startOfToday = Calendar.current.startOfDay(for: now)
 
+        // Core metrics
         async let hrv = average(.heartRateVariabilitySDNN, unit: .secondUnit(with: .milli), from: dayAgo, to: now)
         async let rhr = mostRecent(.restingHeartRate, unit: .count().unitDivided(by: .minute()))
         async let resp = average(.respiratoryRate, unit: .count().unitDivided(by: .minute()), from: dayAgo, to: now)
@@ -163,13 +285,43 @@ final class HealthManager {
         async let energy = sum(.activeEnergyBurned, unit: .kilocalorie(), from: startOfToday, to: now)
         async let sleep = lastNightSleepHours()
 
+        // Extended metrics
+        async let hr = mostRecent(.heartRate, unit: .count().unitDivided(by: .minute()))
+        async let flights = sum(.flightsClimbed, unit: .count(), from: startOfToday, to: now)
+        async let distance = sum(.distanceWalkingRunning, unit: .meterUnit(with: .kilo), from: startOfToday, to: now)
+        async let vo2 = mostRecent(.vo2Max, unit: HKUnit(from: "mL/kg*min"))
+        async let mindful = mindfulMinutesToday()
+        async let standHrs = standHoursToday()
+
+        // Nutrition (from MyFitnessPal, Lose It!, or manual entries synced to Health)
+        async let dietEnergy = sum(.dietaryEnergyConsumed, unit: .kilocalorie(), from: startOfToday, to: now)
+        async let protein = sum(.dietaryProtein, unit: .gram(), from: startOfToday, to: now)
+        async let carbs = sum(.dietaryCarbohydrates, unit: .gram(), from: startOfToday, to: now)
+        async let fat = sum(.dietaryFatTotal, unit: .gram(), from: startOfToday, to: now)
+        async let sugar = sum(.dietarySugar, unit: .gram(), from: startOfToday, to: now)
+        async let fiber = sum(.dietaryFiber, unit: .gram(), from: startOfToday, to: now)
+        async let water = sum(.dietaryWater, unit: .literUnit(with: .milli), from: startOfToday, to: now)
+
         snapshot = HealthSnapshot(
             hrvMs: await hrv,
             restingHR: await rhr,
             respiratoryRate: await resp,
             sleepHours: await sleep,
             steps: await steps,
-            activeEnergyKcal: await energy
+            activeEnergyKcal: await energy,
+            heartRate: await hr,
+            flightsClimbed: await flights,
+            distanceKm: await distance,
+            standHours: await standHrs,
+            mindfulMinutes: await mindful,
+            vo2Max: await vo2,
+            dietaryEnergy: await dietEnergy,
+            protein: await protein,
+            carbs: await carbs,
+            fat: await fat,
+            sugar: await sugar,
+            fiber: await fiber,
+            water: await water.map { $0 / 1000 }  // mL → L
         )
     }
 

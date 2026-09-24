@@ -31,6 +31,18 @@ final class AvatarAnimationController {
 
     /// Stands the character on a fresh turntable, feet at its centre, and returns the
     /// turntable for the scene. It spins around its own vertical axis.
+    /// An invisible box around him that gestures can land on. Without something to hit,
+    /// a drag aimed at the character finds nothing and spinning never starts.
+    func addGrabBox() {
+        let bounds = turntable.visualBounds(relativeTo: turntable)
+        guard bounds.extents.y > 0 else { return }
+        let box = Entity()
+        box.components.set(CollisionComponent(shapes: [.generateBox(size: bounds.extents * [1.6, 1, 1.6])]))
+        box.components.set(InputTargetComponent())
+        box.position = bounds.center
+        turntable.addChild(box)
+    }
+
     func stage(_ avatar: LoadedAvatar) -> Entity {
         self.avatar = avatar
         turntable = Entity()
