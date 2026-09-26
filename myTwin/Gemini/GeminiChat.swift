@@ -100,6 +100,7 @@ final class GeminiChat {
     }
 
     private func finish(_ answered: Bool) {
+        voice.endGeminiAnswer()
         outcome = answered
         finished?.resume(returning: answered)
         finished = nil

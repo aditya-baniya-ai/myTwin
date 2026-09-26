@@ -77,6 +77,12 @@ final class VoiceManager {
     private var speechConverter: AVAudioConverter?
     private var queuedSpeech = 0         // pieces of Gemini's voice waiting to play
     private var speechCut = false        // you talked over Gemini: skip the rest of that answer
+    /// An answer is still arriving from Gemini. Its audio comes in pieces over the network,
+    /// so the queue draining for a moment doesn't mean he has finished talking.
+    private var geminiAnswering = false
+    /// When his words last arrived. While they are still streaming, `lastSpoken` is behind
+    /// the speaker and the echo test cannot be trusted.
+    private var lastGeminiWordsAt: Date?
     private var analyzer: SpeechAnalyzer?
     private var inputStream: AsyncStream<AnalyzerInput>.Continuation?
     private var resultsTask: Task<Void, Never>?
@@ -292,6 +298,7 @@ final class VoiceManager {
 
     func stopSpeaking() {
         nonEchoResults = 0
+        geminiAnswering = false
         speechEndTask?.cancel()
         speechEndTask = nil
         isSpeakingNow = false
@@ -309,6 +316,14 @@ final class VoiceManager {
         speechCut = false
         lastSpoken = ""
         geminiAudioStarted = nil
+        lastGeminiWordsAt = nil
+        geminiAnswering = true
+    }
+
+    /// Call when Gemini has sent everything, or stopped. Until then the app keeps treating
+    /// him as talking even if the audio queue empties between pieces.
+    func endGeminiAnswer() {
+        geminiAnswering = false
     }
 
     /// Plays the next piece of Gemini's voice as it streams in.
@@ -328,6 +343,7 @@ final class VoiceManager {
     /// taken for yours.
     func addGeminiWords(_ words: String) {
         lastSpoken += words
+        lastGeminiWordsAt = .now
     }
 
     private func startPlayer() throws {
@@ -381,7 +397,8 @@ final class VoiceManager {
     /// After the app stops talking, ignore the tail of its own voice before listening again.
     private func watchForSpeechEnd() {
         speechEndTask = Task { [weak self] in
-            while let self, synthesizer.isSpeaking || queuedSpeech > 0, !Task.isCancelled {
+            while let self, synthesizer.isSpeaking || queuedSpeech > 0 || geminiAnswering,
+                  !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(100))
             }
             guard let self, !Task.isCancelled else { return }
@@ -554,9 +571,13 @@ final class VoiceManager {
         let heardWords = spokenWords(heard)
         guard heardWords.count >= 2 else { return false }  // single words are usually echo
 
-        // Gemini's audio outruns its transcription, so early in an answer there is nothing
-        // to compare the echo against and everything looks like an interruption. This is
-        // what cut answers off mid-sentence. Wait for the words to catch up.
+        // Gemini's audio outruns its transcription for the whole answer, not just its
+        // start: whatever he has just said may not be in `lastSpoken` yet, so his own echo
+        // matches nothing and reads as you cutting in. While his words are still arriving,
+        // there is nothing trustworthy to compare against.
+        if let words = lastGeminiWordsAt, Date.now.timeIntervalSince(words) < transcriptionLag {
+            return false
+        }
         if let started = geminiAudioStarted, lastSpoken.isEmpty,
            Date.now.timeIntervalSince(started) < transcriptionLag {
             return false
