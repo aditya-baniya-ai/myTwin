@@ -245,10 +245,39 @@ final class VoiceManager {
         isSpeakingNow = true
 
         let utterance = AVSpeechUtterance(string: lastSpoken)
-        utterance.voice = AVSpeechSynthesisVoice(language: locale.identifier)
-            ?? AVSpeechSynthesisVoice(language: "en-US")
+        utterance.voice = Self.spokenBy(locale.identifier)
         synthesizer.speak(utterance)
         watchForSpeechEnd()
+    }
+
+    /// The best male voice the iPhone has for this language, preferring the downloaded
+    /// higher-quality ones. Falls back to whatever the system would have picked: not every
+    /// language ships a male voice, and the enhanced ones only exist once downloaded in
+    /// Settings > Accessibility > Spoken Content > Voices.
+    private static func spokenBy(_ identifier: String) -> AVSpeechSynthesisVoice? {
+        // The MacinTalk novelty voices (Fred and friends) are still installed and still
+        // report as male, and they sound like 1984. They all live under this prefix.
+        let legacy = "com.apple.speech.synthesis.voice"
+        let males = AVSpeechSynthesisVoice.speechVoices().filter {
+            $0.gender == .male && !$0.identifier.hasPrefix(legacy)
+        }
+        func best(_ voices: [AVSpeechSynthesisVoice]) -> AVSpeechSynthesisVoice? {
+            voices.max { rank($0.quality) < rank($1.quality) }
+        }
+        // His own accent first; failing that any male voice for the language, since a
+        // different accent is closer to what was asked for than the wrong voice entirely.
+        return best(males.filter { $0.language == identifier })
+            ?? best(males.filter { $0.language.hasPrefix(identifier.prefix(2)) })
+            ?? AVSpeechSynthesisVoice(language: identifier)
+            ?? AVSpeechSynthesisVoice(language: "en-US")
+    }
+
+    private static func rank(_ quality: AVSpeechSynthesisVoiceQuality) -> Int {
+        switch quality {
+        case .premium: 3
+        case .enhanced: 2
+        default: 1
+        }
     }
 
     func stopSpeaking() {

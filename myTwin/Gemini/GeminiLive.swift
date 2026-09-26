@@ -36,7 +36,9 @@ final class GeminiLive {
 
         try await send(["setup": [
             "model": "models/\(GeminiAccess.model)",
-            "generationConfig": ["responseModalities": ["AUDIO"]],
+            "generationConfig": ["responseModalities": ["AUDIO"],
+                                 "speechConfig": ["voiceConfig":
+                                    ["prebuiltVoiceConfig": ["voiceName": Self.voice]]]],
             "systemInstruction": ["parts": [["text": instructions]]],
             "tools": tools,
             "outputAudioTranscription": [String: Any](),     // the words of each spoken answer
@@ -44,6 +46,11 @@ final class GeminiLive {
         guard try await receive()["setupComplete"] != nil else { throw URLError(.cannotParseResponse) }
         listen()
     }
+
+    /// Which of Gemini's prebuilt voices Dash speaks with. Google documents each voice's
+    /// character rather than its gender, so this one was picked by ear: "Puck" is the
+    /// upbeat male-sounding voice, which suits him. Swap the name to change it.
+    private static let voice = "Puck"
 
     /// Sends one message from the user. Gemini answers through `events`.
     func ask(_ text: String) async throws {
