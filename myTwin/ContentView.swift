@@ -71,6 +71,10 @@ struct ContentView: View {
             .background { BatteryBackdrop(energy: charge * 100) }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                // Next to the chat button: how he sounds, without going to the You page.
+                Button("Dash's voice", systemImage: "waveform") {
+                    showVoicePicker = true
+                }
                 Button("Ask myTwin", systemImage: "bubble.left.and.text.bubble.right") {
                     showChat = true
                 }
