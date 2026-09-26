@@ -75,6 +75,39 @@ final class CalendarManager {
         return events.map { "\($0.title ?? "Untitled"): \($0.timeText)" }.joined(separator: "\n")
     }
 
+    /// The next seven days as plain text, a day at a time, for the chatbot to read.
+    /// Today is included, so a question like "am I free tomorrow" and one about Friday are
+    /// answered from the same place.
+    func weekEventsText() -> String {
+        guard isAuthorized else { return noAccessText }
+        loadWeekEvents()
+        if week.isEmpty { return "Nothing on the calendar for the next seven days." }
+
+        let days = Calendar.current
+        let today = days.startOfDay(for: .now)
+        let byDay = Dictionary(grouping: week) { days.startOfDay(for: $0.startDate) }
+
+        var lines: [String] = []
+        for ahead in 0..<7 {
+            guard let date = days.date(byAdding: .day, value: ahead, to: today) else { continue }
+            let name = switch ahead {
+            case 0: "Today"
+            case 1: "Tomorrow"
+            default: date.formatted(.dateTime.weekday(.wide).month().day())
+            }
+            guard let onThatDay = byDay[date], !onThatDay.isEmpty else {
+                lines.append("\(name): nothing")
+                continue
+            }
+            let listed = onThatDay.map {
+                $0.isAllDay ? "\($0.title ?? "Untitled") (all day)"
+                            : "\($0.title ?? "Untitled") \($0.timeText)"
+            }
+            lines.append("\(name): " + listed.joined(separator: ", "))
+        }
+        return lines.joined(separator: "\n")
+    }
+
     /// Suggests a new event today. Returns a note for the chatbot.
     func proposeAdd(title: String, hour: Int, minute: Int, durationMinutes: Int) -> String {
         guard isAuthorized else { return noAccessText }

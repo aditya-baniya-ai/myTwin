@@ -37,6 +37,7 @@ final class ChatManager {
         session = LanguageModelSession(
             tools: [
                 TodayEventsTool(calendar: calendar),
+                WeekEventsTool(calendar: calendar),
                 AddEventTool(calendar: calendar),
                 MoveEventTool(calendar: calendar),
                 RemoveEventTool(calendar: calendar),
@@ -49,6 +50,7 @@ final class ChatManager {
             Never begin any other answer with your name.
             Help the user plan their day.
             Use getTodayEvents to answer questions about today's schedule, and only mention events it returns.
+            Use getWeekEvents for anything beyond today: tomorrow, a named weekday, the weekend, or the week ahead. Use it too when today is empty and the user asks what is coming up. Only mention events it returns.
             Use getHealthSummary to answer questions about sleep, heart rate, HRV, steps or energy, and only use numbers it returns.
             Use getTodayPlan for anything about energy later today, the best or worst time to do something, or what you have suggested: when to train, nap, or stop drinking coffee. Its suggestions are yours, not things the user has done or agreed to.
             To add, move or remove an event today, use addEvent, moveEvent or removeEvent. They don't save anything: the app shows the user a Confirm button. Tell the user to tap Confirm.
@@ -131,6 +133,20 @@ nonisolated struct TodayEventsTool: Tool {
 
     func call(arguments: Arguments) async throws -> String {
         await calendar.todayEventsText()
+    }
+}
+
+/// Reads the next seven days of calendar events.
+nonisolated struct WeekEventsTool: Tool {
+    let name = "getWeekEvents"
+    let description = "Gets the user's calendar for the next seven days, a day at a time, including today. Use for tomorrow, a named weekday, the weekend, or the week ahead."
+    let calendar: CalendarManager
+
+    @Generable
+    struct Arguments {}
+
+    func call(arguments: Arguments) async throws -> String {
+        await calendar.weekEventsText()
     }
 }
 
