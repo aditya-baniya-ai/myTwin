@@ -4,12 +4,16 @@ import SwiftUI
 
 /// The paywall the person sees: the one designed in the RevenueCat dashboard when there is
 /// one, and myTwin's own if the offering has none configured yet.
+///
+/// `hasPaywall` covers both kinds the dashboard can produce — the older single design and
+/// the newer component-based one. Checking `offering.paywall` only finds the older kind,
+/// which is why it's deprecated.
 struct ProPaywall: View {
     let pro: Subscription
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        if let offering = pro.offering, offering.paywall != nil {
+        if let offering = pro.offering, offering.hasPaywall {
             // The dashboard's paywall doesn't close itself, so it lands you back where
             // you were, the same way myTwin's own does.
             RevenueCatUI.PaywallView(offering: offering)
