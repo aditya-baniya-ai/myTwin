@@ -6,10 +6,17 @@ import SwiftUI
 /// one, and myTwin's own if the offering has none configured yet.
 struct ProPaywall: View {
     let pro: Subscription
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         if let offering = pro.offering, offering.paywall != nil {
+            // The dashboard's paywall doesn't close itself, so it lands you back where
+            // you were, the same way myTwin's own does.
             RevenueCatUI.PaywallView(offering: offering)
+                .onPurchaseCompleted { _ in dismiss() }
+                .onRestoreCompleted { info in
+                    if info.entitlements[Subscription.entitlement]?.isActive == true { dismiss() }
+                }
         } else {
             PaywallView(pro: pro)
         }
@@ -66,10 +73,6 @@ struct PaywallView: View {
                     }
                 }
 
-                if let problem = pro.problem {
-                    Text(problem).font(.footnote).foregroundStyle(.red)
-                }
-
                 Text("Free either way: your energy score, today's numbers and your reminders.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -79,6 +82,14 @@ struct PaywallView: View {
         }
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 10) {
+                if let problem = pro.problem {
+                    Text(problem)
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                        .transition(.opacity)
+                }
                 Button {
                     guard let package = chosen ?? pro.packages.first else { return }
                     Task {
@@ -103,6 +114,7 @@ struct PaywallView: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
             .background(.bar)
+            .animation(.snappy, value: pro.problem)
         }
         // Plans may still be loading when the paywall opens, so pick again when they land.
         .onChange(of: pro.packages.count, initial: true) {

@@ -10,7 +10,7 @@ import RevenueCat
 @Observable
 final class Subscription {
     /// The entitlement set up in the RevenueCat dashboard.
-    private static let entitlement = "mytwin_pro"
+    static let entitlement = "mytwin_pro"
 
     private(set) var isPro = false
     /// The offering the dashboard is currently showing, and the plans inside it.
