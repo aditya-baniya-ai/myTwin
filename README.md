@@ -11,6 +11,8 @@ Built for the [RevenueCat Shipaton 2026](https://www.shipaton.com) Next Gen Awar
 **Reads** sleep, resting heart rate, heart rate variability, steps, active energy,
 workouts and weight from Apple Health, plus today's events from your calendar.
 
+![Dash in his four energy states](assets/Dash/renders/Dash_States.png)
+
 **Predicts** whether today is better or worse than *your* normal — not an absolute score.
 The model is your own 14-day running average plus a small ridge regression on three sleep
 features. It needs about two weeks of your data before it says anything at all.
