@@ -65,6 +65,15 @@ final class AvatarAnimationController {
         untilAction = firstAction
     }
 
+    /// Plays one clip by name, then blends back into the current idle. Used by the
+    /// showcase, where you pick the gesture instead of waiting for it to come round.
+    func perform(_ clipName: String) {
+        guard let avatar, let action = avatar.clips[clipName] else { return }
+        avatar.animated.playAnimation(action.animation, transitionDuration: 0.35)
+        actionLeft = action.duration - crossfade
+        untilAction = .random(in: actionGap)
+    }
+
     func drag(by points: CGFloat) {
         spin = 0
         turn(by: Float(points) * radiansPerPoint)

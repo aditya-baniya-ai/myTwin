@@ -8,6 +8,9 @@ import SwiftUI
 struct Avatar3DView: View {
     /// 0-100, the score the home screen shows as "% charged".
     let energy: Double
+    /// Set to a clip name to play it now. Changing it again replays; the showcase uses
+    /// this, and the home screen leaves it alone so Dash acts on his own schedule.
+    var gesture: AvatarGesture?
 
     @State private var controller = AvatarAnimationController()
     /// Where the last spin drag had got to, so each step is the movement since the last.
@@ -21,6 +24,9 @@ struct Avatar3DView: View {
 
     var body: some View {
         TwinStage(energy: energy) { scene }
+            .onChange(of: gesture) { _, now in
+                if let now { controller.perform(now.clip) }
+            }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Dash, \(state.rawValue)")
     }

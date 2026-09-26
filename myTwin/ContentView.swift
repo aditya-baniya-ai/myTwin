@@ -17,6 +17,7 @@ struct ContentView: View {
     @State private var pro = Subscription()
     @State private var showPaywall = false
     @State private var showCustomerCentre = false
+    @State private var showShowcase = false
     @State private var showChat = false
     @State private var askGemini = false
     /// Moved on at the top of each hour, when the drain curve and the widget move on.
@@ -98,6 +99,7 @@ struct ContentView: View {
             .task { await followTheHours() }
             .task { await pro.watchForChanges() }
             .onChange(of: pro.isPro, initial: true) { chat.proEnabled = pro.isPro }
+            .sheet(isPresented: $showShowcase) { AvatarShowcase() }
             .sheet(isPresented: $showPaywall) { ProPaywall(pro: pro) }
             .sheet(isPresented: $showCustomerCentre) { ProCustomerCentre() }
             .refreshable {
@@ -262,8 +264,26 @@ struct ContentView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 24)
                 .padding(.bottom, 4)
+            meetDashButton
+                .padding(.bottom, 4)
         }
         .frame(maxWidth: .infinity)
+    }
+
+    /// Opens the showcase: every state and every gesture Dash has, on demand.
+    private var meetDashButton: some View {
+        Button {
+            showShowcase = true
+        } label: {
+            Label("See all of Dash", systemImage: "figure.walk.motion")
+                .font(.caption.weight(.semibold))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(.ultraThinMaterial, in: .capsule)
+                .overlay(Capsule().strokeBorder(.white.opacity(0.14)))
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Shows every energy state and gesture")
     }
 
     private var predictionsPage: some View {
