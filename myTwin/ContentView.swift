@@ -261,16 +261,20 @@ struct ContentView: View {
         }
     }
 
+    /// He lifts for either way of starting: tapping him, or saying his name. Only the tap
+    /// used to show, so the wake word worked with nothing on screen to prove it.
+    private var listening: Bool { voice.isDictating || voice.isAwake }
+
     private var twinContent: some View {
         VStack(spacing: 10) {
             BrandTitle()
                 .padding(.top, 20)
             Avatar3DView(energy: charge * 100)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)     // whatever is left
-                .background { if voice.isDictating { ListeningGlow() } }
-                .scaleEffect(voice.isDictating ? 1.03 : 1)            // he lifts while listening
-                .offset(y: voice.isDictating ? -10 : 0)
-                .animation(.spring(response: 0.45, dampingFraction: 0.7), value: voice.isDictating)
+                .background { if listening { ListeningGlow() } }
+                .scaleEffect(listening ? 1.03 : 1)                    // he lifts while listening
+                .offset(y: listening ? -10 : 0)
+                .animation(.spring(response: 0.45, dampingFraction: 0.7), value: listening)
                 .onTapGesture(perform: talk)
                 .accessibilityLabel("Your twin, \(Int(charge * 100)) percent charged. Tap to talk.")
                 .accessibilityHint(voice.isDictating ? "Tap again when you're done" : "Tap to start listening")
@@ -321,6 +325,40 @@ struct ContentView: View {
             }
             if health.isAuthorized, !week.isEmpty {
                 DashboardSection(title: "Your last 7 days") { WeekStrip(days: week).dashboardCard() }
+            }
+            oftenAsked
+        }
+    }
+
+    /// The questions you keep asking, as one tap each. Hidden until there are a few, so it
+    /// isn't an empty card on your first day.
+    @ViewBuilder private var oftenAsked: some View {
+        let asked = AskedQuestions.top()
+        if !asked.isEmpty {
+            DashboardSection(title: "You often ask") {
+                VStack(spacing: 0) {
+                    ForEach(asked) { item in
+                        Button {
+                            tab = .twin
+                            Task { await chat.send(item.question) }
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: "arrow.turn.down.right")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(BrandTitle.brand[1])
+                                Text(item.question)
+                                    .font(.subheadline)
+                                    .multilineTextAlignment(.leading)
+                                Spacer(minLength: 0)
+                            }
+                            .padding(.vertical, 10)
+                            .contentShape(.rect)
+                        }
+                        .buttonStyle(.plain)
+                        if item.id != asked.last?.id { Divider() }
+                    }
+                }
+                .dashboardCard()
             }
         }
     }

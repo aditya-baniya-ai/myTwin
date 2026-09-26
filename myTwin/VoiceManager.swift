@@ -672,7 +672,9 @@ nonisolated func convertBuffer(_ buffer: AVAudioPCMBuffer,
 /// Finds "twin" (also "my twin", "hey twin") and returns whatever was said after it, ""
 /// if nothing. Returns nil when the word isn't there, so the app stays asleep.
 nonisolated func commandAfterWakePhrase(in text: String) -> String? {
-    let phrase = /(?i)\b(?:hey|my|hi)?[\s,-]*twins?\b[\s,.!?]*/
+    // "twin" elongated, and the near-misses dictation actually produces for it. Everything
+    // here starts with the "tw" sound, which is what makes it recognisable as his name.
+    let phrase = /(?i)\b(?:hey|my|hi|ok)?[\s,-]*(?:tw[iy]+n+s?|tween+|twain|twine|twinny)\b[\s,.!?]*/
     guard let match = text.firstMatch(of: phrase) else { return nil }
     return String(text[match.range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
 }

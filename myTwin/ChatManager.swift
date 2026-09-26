@@ -56,6 +56,7 @@ final class ChatManager {
             To add, move or remove an event today, use addEvent, moveEvent or removeEvent. They don't save anything: the app shows the user a Confirm button. Tell the user to tap Confirm.
             You can only change today's events.
             Keep answers short and simple. When it helps, suggest one next step.
+            When you give a health number or a time, add a short clause saying how it compares with their normal, using only what the tools returned. One sentence in total, never two.
             """
         )
     }
@@ -63,6 +64,7 @@ final class ChatManager {
     /// Gemini answers when you've allowed it and you're online; otherwise, or if it can't be
     /// reached, the model on the iPhone does.
     func send(_ text: String) async {
+        AskedQuestions.record(text)
         messages.append(ChatMessage(isUser: true, text: text))
         calendar.pendingChange = nil  // a new message replaces any unconfirmed suggestion
         isResponding = true

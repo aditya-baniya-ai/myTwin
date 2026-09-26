@@ -133,6 +133,7 @@ final class GeminiChat {
         To add, move or remove one of today's events, use addEvent, moveEvent or removeEvent. They don't save anything: the app shows the user a Confirm button. Tell the user to tap Confirm, and never say the change is done.
         You can only change today's events.
         Your answers are spoken aloud, so keep them to one to three short sentences, without lists or formatting.
+        When you give a health number or a time, add a short clause saying how it compares with their normal, using only what the tools returned. One sentence in total, never two.
         Give general wellness tips only, never medical advice.
         """
     }
