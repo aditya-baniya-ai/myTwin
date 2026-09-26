@@ -4,6 +4,30 @@ import SwiftUI
 /// summary ActivityGrid. These display heart rate, flights climbed, distance, workouts,
 /// nutrition (MyFitnessPal), and body metrics that aren't in the summary grid.
 struct ActivityDetail: View {
+    /// One reading worth showing. Building one from a nil value gives nil, so tiles with
+    /// no data never reach the screen.
+    fileprivate struct Metric: Identifiable {
+        let id: String
+        let title: String
+        let value: String
+        let unit: String
+        let symbol: String
+        let tint: Color
+        let detail: String?
+
+        init?(_ title: String, _ value: String?, unit: String, symbol: String,
+              tint: Color, detail: String? = nil) {
+            guard let value else { return nil }
+            self.id = title
+            self.title = title
+            self.value = value
+            self.unit = unit
+            self.symbol = symbol
+            self.tint = tint
+            self.detail = detail
+        }
+    }
+
     let snapshot: HealthSnapshot
     let workouts: [WorkoutDetail]
 
@@ -34,49 +58,60 @@ struct ActivityDetail: View {
 
     // MARK: - Heart & Body
 
-    private var heartAndBodySection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            sectionHeader("Heart & Body", symbol: "heart.fill", tint: Self.heartColors[0])
+    /// Only what Apple Health actually holds. Not every source writes every metric —
+    /// Garmin, for one, never sends HRV, respiratory rate or VO2 max — so a tile with
+    /// nothing in it would sit there empty forever and read like a fault.
+    private var heartMetrics: [Metric] {
+        [
+            Metric("Heart Rate", snapshot.heartRate.map { "\(Int($0))" },
+                   unit: "bpm", symbol: "heart.fill", tint: Self.heartColors[0]),
+            Metric("Resting HR", snapshot.restingHR.map { "\(Int($0))" },
+                   unit: "bpm", symbol: "heart.circle", tint: Self.heartColors[0]),
+            Metric("HRV", snapshot.hrvMs.map { "\(Int($0))" },
+                   unit: "ms", symbol: "waveform.path.ecg", tint: Self.heartColors[1],
+                   detail: "stress indicator"),
+            Metric("VO\u{2082} Max", snapshot.vo2Max.map { String(format: "%.1f", $0) },
+                   unit: "mL/kg/min", symbol: "lungs.fill", tint: Self.distColors[0]),
+            Metric("Respiratory", snapshot.respiratoryRate.map { String(format: "%.1f", $0) },
+                   unit: "br/min", symbol: "wind", tint: Self.distColors[1]),
+            Metric("Mindful", snapshot.mindfulMinutes.map { String(format: "%.0f", $0) },
+                   unit: "min", symbol: "brain.head.profile",
+                   tint: Color(red: 0.55, green: 0.85, blue: 0.65)),
+        ].compactMap { $0 }
+    }
 
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                metricTile("Heart Rate", value: snapshot.heartRate.map { "\(Int($0))" },
-                           unit: "bpm", symbol: "heart.fill", tint: Self.heartColors[0])
-                metricTile("Resting HR", value: snapshot.restingHR.map { "\(Int($0))" },
-                           unit: "bpm", symbol: "heart.circle", tint: Self.heartColors[0])
-                metricTile("HRV", value: snapshot.hrvMs.map { "\(Int($0))" },
-                           unit: "ms", symbol: "waveform.path.ecg", tint: Self.heartColors[1],
-                           detail: "stress indicator")
-                metricTile("VO\u{2082} Max", value: snapshot.vo2Max.map { String(format: "%.1f", $0) },
-                           unit: "mL/kg/min", symbol: "lungs.fill", tint: Self.distColors[0])
-                metricTile("Respiratory", value: snapshot.respiratoryRate.map { String(format: "%.1f", $0) },
-                           unit: "br/min", symbol: "wind", tint: Self.distColors[1])
-                if let mindful = snapshot.mindfulMinutes {
-                    metricTile("Mindful", value: String(format: "%.0f", mindful),
-                               unit: "min", symbol: "brain.head.profile", tint: Color(red: 0.55, green: 0.85, blue: 0.65))
-                }
+    @ViewBuilder private var heartAndBodySection: some View {
+        if !heartMetrics.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                sectionHeader("Heart & Body", symbol: "heart.fill", tint: Self.heartColors[0])
+                grid(heartMetrics)
             }
+            .dashboardCard()
         }
-        .dashboardCard()
     }
 
     // MARK: - Movement
 
-    private var movementSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            sectionHeader("Movement", symbol: "figure.walk", tint: Self.flightColors[0])
+    private var movementMetrics: [Metric] {
+        [
+            Metric("Flights", snapshot.flightsClimbed.map { "\(Int($0))" },
+                   unit: "climbed", symbol: "arrow.up.right", tint: Self.flightColors[0]),
+            Metric("Distance", snapshot.distanceKm.map { String(format: "%.1f", $0) },
+                   unit: "km", symbol: "figure.walk.motion", tint: Self.distColors[0]),
+            Metric("Stand", snapshot.standHours.map { "\($0)" },
+                   unit: "hours", symbol: "figure.stand",
+                   tint: Color(red: 0.35, green: 0.90, blue: 0.45)),
+        ].compactMap { $0 }
+    }
 
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                metricTile("Flights", value: snapshot.flightsClimbed.map { "\(Int($0))" },
-                           unit: "climbed", symbol: "arrow.up.right", tint: Self.flightColors[0])
-                metricTile("Distance", value: snapshot.distanceKm.map { String(format: "%.1f", $0) },
-                           unit: "km", symbol: "figure.walk.motion", tint: Self.distColors[0])
-                if let standHours = snapshot.standHours {
-                    metricTile("Stand", value: "\(standHours)",
-                               unit: "hours", symbol: "figure.stand", tint: Color(red: 0.35, green: 0.90, blue: 0.45))
-                }
+    @ViewBuilder private var movementSection: some View {
+        if !movementMetrics.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                sectionHeader("Movement", symbol: "figure.walk", tint: Self.flightColors[0])
+                grid(movementMetrics)
             }
+            .dashboardCard()
         }
-        .dashboardCard()
     }
 
     // MARK: - Workouts
@@ -198,13 +233,23 @@ struct ActivityDetail: View {
             .foregroundStyle(tint)
     }
 
-    private func metricTile(_ title: String, value: String?, unit: String, symbol: String,
+    private func grid(_ metrics: [Metric]) -> some View {
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)],
+                  spacing: 10) {
+            ForEach(metrics) { metric in
+                metricTile(metric.title, value: metric.value, unit: metric.unit,
+                           symbol: metric.symbol, tint: metric.tint, detail: metric.detail)
+            }
+        }
+    }
+
+    private func metricTile(_ title: String, value: String, unit: String, symbol: String,
                             tint: Color, detail: String? = nil) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Image(systemName: symbol)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(tint)
-            Text(value ?? "—")
+            Text(value)
                 .font(.system(.title3, design: .rounded).weight(.bold))
                 .contentTransition(.numericText())
             HStack(spacing: 4) {
