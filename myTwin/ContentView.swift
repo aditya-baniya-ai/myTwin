@@ -370,11 +370,32 @@ struct ContentView: View {
     /// A way back to the free app while testing, since a Test Store purchase can't be cancelled.
     @ViewBuilder private var proResetRow: some View {
         if pro.isPro {
-            Button("Reset to free (testing)") { Task { await pro.resetForTesting() } }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.leading, 4)
+            Button {
+                Task { await pro.resetForTesting() }
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "arrow.counterclockwise")
+                        .font(.title3)
+                        .foregroundStyle(.orange)
+                        .frame(width: 26)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Reset to free")
+                            .font(.subheadline.weight(.semibold))
+                        Text("Testing only — a Test Store purchase can't be cancelled")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                    if pro.busy {
+                        ProgressView()
+                    } else {
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    }
+                }
+                .dashboardCard()
+            }
+            .buttonStyle(.plain)
+            .disabled(pro.busy)
         }
     }
 #endif
