@@ -88,12 +88,3 @@ struct TwinTabBar: View {
         VStack { Spacer(); TwinTabBar(tab: $tab) }
     }
 }
-
-/// Vertical-swipe tab switching removed — tabs are navigated via
-/// horizontal paging or the tab bar. Keeping the extension as a no-op
-/// so call sites don't need to change.
-extension View {
-    func flowsBetweenTabs(_ tab: Binding<TwinTab>) -> some View {
-        self    // no-op: vertical swipes now scroll content normally
-    }
-}

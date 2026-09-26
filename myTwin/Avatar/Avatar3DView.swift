@@ -114,39 +114,6 @@ struct Avatar3DView: View {
     }
 }
 
-/// Press and hold Dash to talk: starts once you have held him a moment, ends when you let
-/// go. A UIKit recogniser, so a finger that drifts doesn't cancel it and the spin gesture
-/// can run alongside.
-struct HoldToTalk: UIGestureRecognizerRepresentable {
-    let began: () -> Void
-    let ended: () -> Void
-
-    func makeUIGestureRecognizer(context: Context) -> UILongPressGestureRecognizer {
-        let hold = UILongPressGestureRecognizer()
-        hold.minimumPressDuration = 0.35
-        hold.allowableMovement = 80
-        hold.delegate = context.coordinator
-        return hold
-    }
-
-    func handleUIGestureRecognizerAction(_ hold: UILongPressGestureRecognizer, context: Context) {
-        switch hold.state {
-        case .began: began()
-        case .ended, .cancelled, .failed: ended()
-        default: break
-        }
-    }
-
-    func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator { Coordinator() }
-
-    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
-        func gestureRecognizer(_ recognizer: UIGestureRecognizer,
-                               shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
-            true
-        }
-    }
-}
-
 /// A pan that only starts on a sideways drag, so the page around it still scrolls up and
 /// down. Used to spin Dash and to swipe suggestions.
 struct HorizontalPan: UIGestureRecognizerRepresentable {

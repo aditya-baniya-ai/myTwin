@@ -1,0 +1,113 @@
+{
+  "weights": {
+    "bad_normalization": 0,
+    "maximum_influences": 2
+  },
+  "glb": {
+    "triangles": 43746,
+    "materials": 4,
+    "skins": 1,
+    "joints": [
+      52
+    ],
+    "animations": [
+      "idle_normal",
+      "idle_energetic"
+    ],
+    "morphs": {
+      "Body_SculptedFace_Mesh": [
+        "Smile",
+        "Frown",
+        "BlinkLeft",
+        "BlinkRight",
+        "EyesWide",
+        "EyesTired",
+        "BrowsUp",
+        "BrowsDown",
+        "MouthOpen",
+        "Yawn"
+      ],
+      "Cap_Crown_Mesh": [],
+      "Eye_Sclera_L_Mesh": [
+        "BlinkLeft",
+        "BlinkRight",
+        "EyesWide",
+        "EyesTired"
+      ],
+      "Hair_Base_Mesh": [],
+      "Jacket_FrontBack_L_Mesh": [],
+      "Pants_TailoredLeg_L_Mesh": [],
+      "Shirt_Torso_Mesh": [],
+      "Shoes_Outsole_L_Mesh": []
+    },
+    "textures": 8
+  },
+  "glb_reimport": {
+    "armatures": {
+      "Dash_Armature": 52
+    },
+    "mesh_count": 9,
+    "actions": [
+      "idle_energetic",
+      "idle_normal"
+    ],
+    "morph_objects": {
+      "Body": [
+        "Basis",
+        "Smile",
+        "Frown",
+        "BlinkLeft",
+        "BlinkRight",
+        "EyesWide",
+        "EyesTired",
+        "BrowsUp",
+        "BrowsDown",
+        "MouthOpen",
+        "Yawn"
+      ],
+      "Eyes": [
+        "Basis",
+        "BlinkLeft",
+        "BlinkRight",
+        "EyesWide",
+        "EyesTired"
+      ]
+    }
+  },
+  "fbx_reimport": {
+    "armatures": {
+      "Dash_Armature": 52
+    },
+    "mesh_count": 8,
+    "actions": [
+      "Dash_Armature|idle_energetic",
+      "Dash_Armature|idle_normal",
+      "Key.001|idle_energetic",
+      "Key.001|idle_normal",
+      "Key|idle_energetic",
+      "Key|idle_normal"
+    ],
+    "morph_objects": {
+      "Body": [
+        "Basis",
+        "Smile",
+        "Frown",
+        "BlinkLeft",
+        "BlinkRight",
+        "EyesWide",
+        "EyesTired",
+        "BrowsUp",
+        "BrowsDown",
+        "MouthOpen",
+        "Yawn"
+      ],
+      "Eyes": [
+        "Basis",
+        "BlinkLeft",
+        "BlinkRight",
+        "EyesWide",
+        "EyesTired"
+      ]
+    }
+  }
+}

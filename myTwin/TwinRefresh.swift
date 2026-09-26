@@ -31,7 +31,6 @@ enum TwinRefresh {
     static func share(dayStart: Double) {
         TwinState.save(dayStart: dayStart)
         WidgetCenter.shared.reloadAllTimelines()
-        TwinIcon.show(AvatarEnergyState(score: DayCharge.remaining(from: dayStart) * 100))
     }
 
     /// The morning line: what today looks like, and when to spend it. Written from the

@@ -1,19 +1,19 @@
 import SwiftUI
 
-/// A ring that breathes around Dash while he is listening to you.
-struct ListeningRing: View {
-    @State private var wide = false
+/// The light around Dash while he is listening: he lifts a little and the glow behind him
+/// breathes. Quieter than a ring drawn over him, and it reads at a glance.
+struct ListeningGlow: View {
+    @State private var breathing = false
 
     var body: some View {
-        Circle()
-            .strokeBorder(LinearGradient(colors: BrandTitle.brand, startPoint: .topLeading,
-                                         endPoint: .bottomTrailing),
-                          lineWidth: 3)
-            .scaleEffect(wide ? 1.02 : 0.88)
-            .opacity(wide ? 0.12 : 0.55)
+        RadialGradient(colors: [BrandTitle.brand[0].opacity(breathing ? 0.55 : 0.28),
+                                BrandTitle.brand[1].opacity(breathing ? 0.28 : 0.12),
+                                .clear],
+                       center: .center, startRadius: 4, endRadius: breathing ? 230 : 180)
+            .blur(radius: 26)
             .allowsHitTesting(false)
             .onAppear {
-                withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) { wide = true }
+                withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) { breathing = true }
             }
     }
 }

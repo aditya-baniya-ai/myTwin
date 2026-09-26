@@ -12,3 +12,9 @@ DerivedData/
 
 # Secrets: the Gemini API key. Never commit.
 Config/Secrets.xcconfig
+
+# macOS
+.DS_Store
+
+# Blender's auto-backup of the previous save
+*.blend1

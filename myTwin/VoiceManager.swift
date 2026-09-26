@@ -29,6 +29,9 @@ final class VoiceManager {
     private let pauseBeforeSending: TimeInterval = 5.0
     /// Back to sleep after this much quiet, so it stops reacting to the room.
     private let sleepAfterIdle: TimeInterval = 30
+    /// While you are talking to it on purpose, this much silence ends the turn, so the
+    /// microphone never stays open on a forgotten tap.
+    private let quietEndsDictation: TimeInterval = 8
     /// How long the app's own voice keeps echoing after it stops talking.
     private let echoTail: Duration = .milliseconds(800)
 
@@ -39,30 +42,25 @@ final class VoiceManager {
     private(set) var isAwake = false
     /// Tap to talk: listening until you tap again, however long you pause.
     private(set) var isDictating = false
-    /// You are holding Dash down, so letting go is what ends it.
-    private(set) var isHeld = false
     /// A call, Siri or another app has the microphone. Nothing can be heard until it ends.
     private(set) var isInterrupted = false
     /// The microphone is really running, not just meant to be.
     private(set) var isHearing = false
 
-    /// How to finish, in the words that match the way you started.
-    var listeningHint: String {
-        isHeld ? "Listening… let go when you're done" : "Listening… tap Dash again when you're done"
-    }
+    /// How to finish.
+    let listeningHint = "Listening… tap Dash again when you're done"
 
     /// One line of plain status, shown on both the home screen and the chat.
     var statusNote: String? {
         switch status {
         case .idle: nil
-        case .preparing: "Getting the offline voice model ready…"
-        case _ where isInterrupted:
-            "Your microphone is busy with a call. myTwin listens again when it ends."
-        case .listening where !isHearing: "Starting the microphone…"
+        case .preparing: nil
+        case _ where isInterrupted: "Your microphone is busy with a call."
+        case .listening where !isHearing: nil            // starting up: not worth saying
         case .listening: isDictating ? listeningHint
-                       : isAwake ? "Listening. Just talk, and talk over me to interrupt."
-                                 : "Hold Dash while you talk, or tap to start and tap again. Or say \"twin\"."
-        case .unavailable(let reason): reason
+                       : isAwake ? "Listening…"
+                                 : "Tap Dash to talk, or say \"twin\"."
+        case .unavailable: nil                           // nothing you can do about it here
         }
     }
 
@@ -188,12 +186,10 @@ final class VoiceManager {
     // MARK: - Tap to talk
 
     /// Starts a dictation that you end yourself, so no pause is ever taken for the end.
-    /// `untilRelease` when you are holding Dash down rather than tapping him.
-    func startDictation(untilRelease: Bool = false) {
+    func startDictation() {
         guard status == .listening else { return }
         stopSpeaking()                  // tapping Dash while he talks means you want the floor
         isDictating = true
-        isHeld = untilRelease
         isAwake = true
         recentSpeech = []
         pieces = []
@@ -202,15 +198,24 @@ final class VoiceManager {
         lastHeard = .now
     }
 
-    /// Ends the dictation and sends what you said.
+    /// Ends the dictation and sends what you said, once the recogniser has caught up.
     func finishDictation() {
         guard isDictating else { return }
         Task { [weak self] in
-            // The last word can still be on its way from the recogniser.
-            try? await Task.sleep(for: .milliseconds(500))
+            // The recogniser runs a word or two behind your voice, and the last words often
+            // arrive after the tap. Wait until what it has heard stops changing — or a
+            // second and a half, whichever comes first. Cutting at a fixed moment is what
+            // sent half-finished sentences.
+            let deadline = Date.now.addingTimeInterval(1.5)
+            var settled = self?.transcript ?? ""
+            while Date.now < deadline {
+                try? await Task.sleep(for: .milliseconds(250))
+                guard let self, isDictating else { return }
+                if transcript == settled { break }
+                settled = transcript
+            }
             guard let self, isDictating else { return }
             isDictating = false
-            isHeld = false
             isAwake = false
             let sentence = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
             sentUpTo = latestResultEnd
@@ -400,7 +405,6 @@ final class VoiceManager {
                 case .began:
                     isInterrupted = true
                     isDictating = false          // whatever you were saying is lost with the microphone
-                    isHeld = false
                     isAwake = false
                 case .ended:
                     isInterrupted = false        // the engine watchdog starts the microphone again
@@ -523,8 +527,8 @@ final class VoiceManager {
                 guard isAwake else { continue }
 
                 if isDictating {
-                    // You end this one yourself, unless you walk away from it.
-                    if !isSpeakingNow, quietFor > sleepAfterIdle { finishDictation() }
+                    // You end it with a second tap; otherwise a short silence does.
+                    if !isSpeakingNow, quietFor > quietEndsDictation { finishDictation() }
                     continue
                 }
 
@@ -538,6 +542,7 @@ final class VoiceManager {
                 transcript = ""
                 pieces = []
                 lastHeard = .now
+                isAwake = false              // one question per wake: say "twin" again for more
                 onSentence?(withoutWakePhrase(sentence))
             }
         }

@@ -29,6 +29,8 @@ final class CalendarManager {
 
     var isAuthorized = EKEventStore.authorizationStatus(for: .event) == .fullAccess
     var events: [EKEvent] = []
+    /// The next seven days, today first, for the week view.
+    var week: [EKEvent] = []
     var pendingChange: CalendarChange?
     var errorMessage: String?
 
@@ -56,6 +58,16 @@ final class CalendarManager {
     // MARK: - Chatbot tools
 
     /// Today's events as plain text, for the chatbot to read.
+    /// Everything on the calendar between today and a week from now.
+    func loadWeekEvents() {
+        guard isAuthorized else { return }
+        let days = Calendar.current
+        let start = days.startOfDay(for: .now)
+        guard let end = days.date(byAdding: .day, value: 7, to: start) else { return }
+        let predicate = store.predicateForEvents(withStart: start, end: end, calendars: nil)
+        week = store.events(matching: predicate).sorted { $0.startDate < $1.startDate }
+    }
+
     func todayEventsText() -> String {
         guard isAuthorized else { return noAccessText }
         loadTodayEvents()

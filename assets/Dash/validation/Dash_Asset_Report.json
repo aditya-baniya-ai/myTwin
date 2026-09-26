@@ -1,0 +1,122 @@
+{
+  "triangles": 47866,
+  "materials": 4,
+  "textures": {
+    "BaseColor": [
+      2048,
+      2048
+    ],
+    "Roughness": [
+      2048,
+      2048
+    ],
+    "optional_downscales": [
+      1024,
+      1024
+    ]
+  },
+  "bones": 52,
+  "shape_keys": {
+    "Body": [
+      "Smile",
+      "Frown",
+      "BlinkLeft",
+      "BlinkRight",
+      "EyesWide",
+      "EyesTired",
+      "BrowsUp",
+      "BrowsDown",
+      "MouthOpen",
+      "Yawn"
+    ],
+    "Eyes": [
+      "BlinkLeft",
+      "BlinkRight",
+      "EyesWide",
+      "EyesTired"
+    ]
+  },
+  "actions": [
+    "idle_normal",
+    "idle_energetic",
+    "idle_tired",
+    "idle_exhausted",
+    "yawn",
+    "celebrate",
+    "stretch"
+  ],
+  "meshes": {
+    "Body": {
+      "source_triangles": 35600,
+      "triangles": 12448,
+      "vertices": 6274
+    },
+    "Eyes": {
+      "source_triangles": 2420,
+      "triangles": 2420,
+      "vertices": 1222
+    },
+    "Hair": {
+      "source_triangles": 37776,
+      "triangles": 8000,
+      "vertices": 4054
+    },
+    "Jacket": {
+      "source_triangles": 63530,
+      "triangles": 11000,
+      "vertices": 5542
+    },
+    "Shirt": {
+      "source_triangles": 10784,
+      "triangles": 1498,
+      "vertices": 753
+    },
+    "Pants": {
+      "source_triangles": 28156,
+      "triangles": 6000,
+      "vertices": 3020
+    },
+    "Shoes": {
+      "source_triangles": 27296,
+      "triangles": 6500,
+      "vertices": 3334
+    }
+  },
+  "validation": {
+    "Body": {
+      "non_manifold_edges": 0,
+      "loose_vertices": 0,
+      "zero_area_faces": 0
+    },
+    "Eyes": {
+      "non_manifold_edges": 0,
+      "loose_vertices": 0,
+      "zero_area_faces": 0
+    },
+    "Hair": {
+      "non_manifold_edges": 0,
+      "loose_vertices": 0,
+      "zero_area_faces": 0
+    },
+    "Jacket": {
+      "non_manifold_edges": 0,
+      "loose_vertices": 0,
+      "zero_area_faces": 0
+    },
+    "Shirt": {
+      "non_manifold_edges": 0,
+      "loose_vertices": 0,
+      "zero_area_faces": 0
+    },
+    "Pants": {
+      "non_manifold_edges": 0,
+      "loose_vertices": 0,
+      "zero_area_faces": 0
+    },
+    "Shoes": {
+      "non_manifold_edges": 0,
+      "loose_vertices": 0,
+      "zero_area_faces": 0
+    }
+  }
+}
