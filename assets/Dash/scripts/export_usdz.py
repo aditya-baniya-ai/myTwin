@@ -84,9 +84,11 @@ def export_usdz():
         obj.select_set(True)
     bpy.ops.wm.usd_export(
         filepath=os.path.join(AVATAR_DIR, "Dash.usdz"),
-        selected_objects_only=True, visible_objects_only=False,
+        selected_objects_only=True,
         export_animation=True, export_armatures=True, only_deform_bones=True,
         export_shapekeys=True, export_materials=True, generate_preview_surface=True,
+        # Dash carries a baked normal map, so normals and UVs have to travel with him.
+        export_normals=True, export_uvmaps=True, export_textures_mode="NEW",
         export_subdivision="IGNORE", triangulate_meshes=True,
         convert_orientation=True, export_global_forward_selection="NEGATIVE_Z",
         export_global_up_selection="Y",
