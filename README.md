@@ -83,12 +83,24 @@ open myTwin/myTwin.xcodeproj
 It builds and runs as-is: the RevenueCat key is committed (public keys are meant to be),
 so the paywall works out of the box.
 
-Gemini is optional. Without a key the app never calls it and answers on device instead.
-To enable it, create `Config/Secrets.xcconfig` — git-ignored, never commit it:
+### Gemini API key (optional)
 
-```
-GEMINI_API_KEY = your-key-here
-```
+Without a key the app builds and runs normally — Dash answers on-device via Apple's
+Foundation Models instead of calling Gemini. You only need this to test the Gemini Live
+API path.
+
+1. Get a free key at <https://aistudio.google.com/apikey>.
+2. Copy the template into place:
+
+   ```bash
+   cp Config/Secrets.xcconfig.example Config/Secrets.xcconfig
+   ```
+
+3. Open `Config/Secrets.xcconfig` and replace `your-key-here` with your key (no quotes,
+   no spaces inside the key).
+
+`Secrets.xcconfig` is listed in `.gitignore` and must never be committed. The example
+file is committed so contributors know exactly what format is expected.
 
 ## Layout
 
