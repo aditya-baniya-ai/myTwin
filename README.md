@@ -11,7 +11,62 @@ Built for the [RevenueCat Shipaton 2026](https://www.shipaton.com) Next Gen Awar
 **Reads** sleep, resting heart rate, heart rate variability, steps, active energy,
 workouts and weight from Apple Health, plus today's events from your calendar.
 
+## Dash
+
+Dash is a fully custom 3D character — modelled, rigged, and animated in Blender, then
+exported as a single USDZ with nine clips on one timeline. He runs live in RealityKit,
+lit and animated in real time from your health data.
+
+### The four energy states
+
+Each state is a looping idle animation driven by your charge score (0–100). Dash doesn't
+just change colour — his posture, breathing, and face all shift.
+
 ![Dash in his four energy states](assets/Dash/renders/Dash_States.png)
+
+| State | Score | What you see |
+|---|---|---|
+| **Energetic** | 80–100 | Stands tall, bouncy breathing, bright eyes. Breaks into a wave or a jump on his own. |
+| **Normal** | 55–79 | Easy, neutral posture. Stretches now and then. |
+| **Tired** | 30–54 | Shoulders drop, slower breathing. Yawns periodically. |
+| **Exhausted** | 0–29 | Barely upright, eyes heavy. Dozes off mid-idle. |
+
+### One-shot gestures
+
+On top of the idle loop, Dash plays five one-shot clips — triggered automatically based
+on his state, or on demand via the "Meet Dash" showcase screen:
+
+| Gesture | Triggered when |
+|---|---|
+| **Wave** | Energetic state, randomly |
+| **Jump** | Energetic state, randomly |
+| **Stretch** | Normal state, randomly |
+| **Yawn** | Tired state, randomly |
+| **Doze** | Exhausted state, randomly |
+
+### Character sheets
+
+The final Dash — skin, hair and cloth with a baked normal map, sixteen face shapes:
+
+<table>
+<tr>
+<td align="center"><img src="assets/Dash/renders/Dash_Hero.png" width="220"/><br/><sub>Hero pose</sub></td>
+<td align="center"><img src="assets/Dash/renders/Dash_ThreeQuarter.png" width="220"/><br/><sub>Three-quarter</sub></td>
+<td align="center"><img src="assets/Dash/renders/Dash_Side.png" width="220"/><br/><sub>Side</sub></td>
+</tr>
+<tr>
+<td align="center"><img src="assets/Dash/renders/Dash_Front.png" width="220"/><br/><sub>Front (T-pose)</sub></td>
+<td align="center"><img src="assets/Dash/renders/Dash_Back.png" width="220"/><br/><sub>Back — jacket detail</sub></td>
+<td align="center"><img src="assets/Dash/renders/Dash_Face.png" width="220"/><br/><sub>Face close-up — 16 blend shapes</sub></td>
+</tr>
+</table>
+
+### Talking and listening
+
+Tap Dash or say **"twin"** (and near-misses: *tween*, *twain*, *twine*, *twyn*) to start
+a conversation. While he is listening, Dash lifts slightly and a glow ring pulses around
+him — both the tap and the wake word trigger the same animation so there's always visible
+feedback. Answers are spoken back through the voice you choose on the You tab.
 
 **Predicts** whether today is better or worse than *your* normal — not an absolute score.
 The model is your own 14-day running average plus a small ridge regression on three sleep
