@@ -45,6 +45,13 @@ enum VoiceChoice {
 
     // MARK: - The iPhone's own voice
 
+    /// Locale.current.identifier writes "en_US", voices write "en-US". Comparing the two
+    /// as they come never matches, which silently skipped the exact-region choice and let
+    /// the fallback hand back Samantha — a third voice, and a female one.
+    static func tag(_ identifier: String) -> String {
+        identifier.replacingOccurrences(of: "_", with: "-")
+    }
+
     /// Every voice the iPhone can speak this language with, best quality first. The
     /// MacinTalk novelty voices are left out: they are still installed and still report a
     /// gender, but they sound like 1984.
@@ -66,10 +73,12 @@ enum VoiceChoice {
            let voice = AVSpeechSynthesisVoice(identifier: saved) {
             return voice
         }
+        let wanted = tag(identifier)
         let voices = deviceVoices(for: identifier)
-        return voices.first { $0.gender == .male && $0.language == identifier }
+        return voices.first { $0.gender == .male && $0.language == wanted }
             ?? voices.first { $0.gender == .male }
-            ?? AVSpeechSynthesisVoice(language: identifier)
+            ?? voices.first
+            ?? AVSpeechSynthesisVoice(language: wanted)
             ?? AVSpeechSynthesisVoice(language: "en-US")
     }
 
