@@ -103,6 +103,18 @@ struct ContentView: View {
             }
             .task { await followTheHours() }
             .task { await pro.watchForChanges() }
+            // Both models read today's plan through this, and only the screen knows the
+            // day's charge, bedtime and what has been dismissed.
+            .onAppear {
+                chat.planSource.summary = { [self] in
+                    TodayPlanText.summary(.init(dayStart: dayStart,
+                                                bedtime: bedtimeDate,
+                                                events: DayPlanner.items(from: calendar.events),
+                                                dismissed: dismissed,
+                                                trainedToday: trainedToday,
+                                                easyDay: energy?.band == .below))
+                }
+            }
             .onChange(of: pro.isPro, initial: true) { chat.proEnabled = pro.isPro }
             .sheet(isPresented: $showShowcase) { AvatarShowcase() }
             .sheet(isPresented: $showVoicePicker) {

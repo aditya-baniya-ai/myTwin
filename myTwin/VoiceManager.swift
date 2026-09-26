@@ -92,8 +92,15 @@ final class VoiceManager {
     private var pieces: [(range: CMTimeRange, text: String)] = []
     private var lastHeard = Date.now
     private var lastSpoken = ""
+    /// When Gemini's voice began. Its words arrive on a separate, slower stream, so for a
+    /// moment the speaker is ahead of `lastSpoken` and its own echo looks like a stranger.
+    private var geminiAudioStarted: Date?
+    /// How long the words are given to catch up with the voice.
+    private let transcriptionLag: TimeInterval = 2.0
     private var isSpeakingNow = false
     private var previewTask: Task<Void, Never>?
+    /// Consecutive results that didn't look like echo, so one stray word can't cut an answer.
+    private var nonEchoResults = 0
     // The recogniser delivers speech in pieces; the wake phrase can straddle two of them.
     private var recentSpeech: [String] = []
     // Where the last sent sentence ended in the audio. Results before this are already
@@ -284,6 +291,7 @@ final class VoiceManager {
     }
 
     func stopSpeaking() {
+        nonEchoResults = 0
         speechEndTask?.cancel()
         speechEndTask = nil
         isSpeakingNow = false
@@ -300,6 +308,7 @@ final class VoiceManager {
     func startGeminiAnswer() {
         speechCut = false
         lastSpoken = ""
+        geminiAudioStarted = nil
     }
 
     /// Plays the next piece of Gemini's voice as it streams in.
@@ -309,6 +318,7 @@ final class VoiceManager {
         guard let buffer = matchEngine(piece) else { return }
         queuedSpeech += 1
         isSpeakingNow = true
+        if geminiAudioStarted == nil { geminiAudioStarted = .now }
         // The manager lives as long as the app, so holding it until the piece plays is fine.
         player.scheduleBuffer(buffer) { Task { @MainActor in self.queuedSpeech -= 1 } }
         if speechEndTask == nil { watchForSpeechEnd() }
@@ -481,10 +491,15 @@ final class VoiceManager {
                     if isSpeakingNow {
                         guard isInterruption(text) else {
                             // The app hearing itself: throw it away.
+                            nonEchoResults = 0
                             pieces = []
                             transcript = ""
                             continue
                         }
+                        // Echo that slips past the test tends to come alone. Real speech
+                        // keeps coming, so wait for a second result before cutting him off.
+                        nonEchoResults += 1
+                        guard nonEchoResults >= 2 else { continue }
                         stopSpeaking()  // you talked over it
                         pieces = []
                     }
@@ -538,6 +553,14 @@ final class VoiceManager {
     private func isInterruption(_ heard: String) -> Bool {
         let heardWords = spokenWords(heard)
         guard heardWords.count >= 2 else { return false }  // single words are usually echo
+
+        // Gemini's audio outruns its transcription, so early in an answer there is nothing
+        // to compare the echo against and everything looks like an interruption. This is
+        // what cut answers off mid-sentence. Wait for the words to catch up.
+        if let started = geminiAudioStarted, lastSpoken.isEmpty,
+           Date.now.timeIntervalSince(started) < transcriptionLag {
+            return false
+        }
 
         // A number the app never said ("move it to 5") means you're giving a new instruction.
         let spoken = Set(spokenWords(lastSpoken))

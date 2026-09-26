@@ -22,11 +22,15 @@ final class GeminiChat {
     private var lastEvent = Date.now
     private var attempt = 0
 
-    init(access: GeminiAccess, voice: VoiceManager, calendar: CalendarManager, health: HealthManager) {
+    private let plan: TodayPlanSource
+
+    init(access: GeminiAccess, voice: VoiceManager, calendar: CalendarManager,
+         health: HealthManager, plan: TodayPlanSource) {
         self.access = access
         self.voice = voice
         self.calendar = calendar
         self.health = health
+        self.plan = plan
     }
 
     /// Answers `text`, handing each piece of Gemini's words to `onWords` as it arrives.
@@ -82,6 +86,11 @@ final class GeminiChat {
             heardSomething = true
             let result = await run(name, arguments)
             try? await source.reply(to: id, name: name, result: result)
+        case .interrupted:
+            // Gemini has stopped talking, so drop whatever is still queued rather than
+            // letting the tail play over what the user is now saying.
+            voice.stopSpeaking()
+            finish(heardSomething)
         case .answerComplete:
             finish(true)
         case .closed:
@@ -118,6 +127,7 @@ final class GeminiChat {
         It is now \(Date.now.formatted(date: .complete, time: .shortened)) in \(TimeZone.current.identifier), the user's own time zone. Always answer in that time, never UTC.
         Use getTodayEvents for questions about today's schedule, and only mention events it returns.
         Use getHealthSummary for questions about sleep, heart rate, HRV, steps or energy, and only use numbers it returns.
+        Use getTodayPlan for anything about energy later today, the best or worst time to do something, or what you have suggested: when to train, nap, or stop drinking coffee. Its suggestions are yours, not things the user has done or agreed to.
         To add, move or remove one of today's events, use addEvent, moveEvent or removeEvent. They don't save anything: the app shows the user a Confirm button. Tell the user to tap Confirm, and never say the change is done.
         You can only change today's events.
         Your answers are spoken aloud, so keep them to one to three short sentences, without lists or formatting.
@@ -129,6 +139,7 @@ final class GeminiChat {
     private static let tools: [[String: Any]] = [["functionDeclarations": [
         function("getTodayEvents", "Gets the user's calendar events for today, with start and end times."),
         function("getHealthSummary", "Gets the user's latest health numbers: sleep, HRV, resting heart rate, respiratory rate, steps and active energy."),
+        function("getTodayPlan", "Gets today's predicted energy curve, its peak and dip, bedtime, and the activities myTwin suggests fitting into the day, such as a workout, a nap or the last coffee."),
         function("addEvent", "Suggests adding an event today. The user must tap Confirm before it is saved.", [
             "title": ("STRING", "Short event title, for example Gym"),
             "hour": ("INTEGER", "Start hour in 24-hour time, 0 to 23"),
@@ -169,6 +180,8 @@ final class GeminiChat {
             return calendar.todayEventsText()
         case "getHealthSummary":
             return await health.summaryText()
+        case "getTodayPlan":
+            return plan.summary()
         case "addEvent":
             return calendar.proposeAdd(title: title, hour: number("hour"), minute: number("minute"),
                                        durationMinutes: number("durationMinutes", default: 60))

@@ -21,11 +21,15 @@ final class ChatManager {
 
     private let session: LanguageModelSession
     private let geminiChat: GeminiChat
+    /// Filled in by ContentView, which knows the day's charge, bedtime and dismissals.
+    let planSource = TodayPlanSource()
 
     init(calendar: CalendarManager, health: HealthManager, gemini: GeminiAccess, voice: VoiceManager) {
         self.calendar = calendar
         self.gemini = gemini
-        geminiChat = GeminiChat(access: gemini, voice: voice, calendar: calendar, health: health)
+        let planSource = self.planSource
+        geminiChat = GeminiChat(access: gemini, voice: voice, calendar: calendar, health: health,
+                                plan: planSource)
         // Wording tested against Apple's safety filter: giving the assistant a name plus the date
         // got calendar questions blocked, and without the rules about saving the model claimed it
         // had changed events. The name alone is fine, and without it the model invented one
@@ -37,6 +41,7 @@ final class ChatManager {
                 MoveEventTool(calendar: calendar),
                 RemoveEventTool(calendar: calendar),
                 HealthSummaryTool(health: health),
+                TodayPlanTool(plan: planSource),
             ],
             instructions: """
             You are the user's own assistant in the myTwin app, and your name is myTwin.
@@ -45,6 +50,7 @@ final class ChatManager {
             Help the user plan their day.
             Use getTodayEvents to answer questions about today's schedule, and only mention events it returns.
             Use getHealthSummary to answer questions about sleep, heart rate, HRV, steps or energy, and only use numbers it returns.
+            Use getTodayPlan for anything about energy later today, the best or worst time to do something, or what you have suggested: when to train, nap, or stop drinking coffee. Its suggestions are yours, not things the user has done or agreed to.
             To add, move or remove an event today, use addEvent, moveEvent or removeEvent. They don't save anything: the app shows the user a Confirm button. Tell the user to tap Confirm.
             You can only change today's events.
             Keep answers short and simple. When it helps, suggest one next step.
@@ -125,6 +131,20 @@ nonisolated struct TodayEventsTool: Tool {
 
     func call(arguments: Arguments) async throws -> String {
         await calendar.todayEventsText()
+    }
+}
+
+/// Reads today's forecast and the plan built from it.
+nonisolated struct TodayPlanTool: Tool {
+    let name = "getTodayPlan"
+    let description = "Gets today's predicted energy curve, its peak and dip, bedtime, and the activities myTwin suggests fitting into the day, such as a workout, a nap or the last coffee."
+    let plan: TodayPlanSource
+
+    @Generable
+    struct Arguments {}
+
+    func call(arguments: Arguments) async throws -> String {
+        await plan.summary()
     }
 }
 

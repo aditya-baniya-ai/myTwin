@@ -11,6 +11,7 @@ final class GeminiLive {
         case words(String)                  // the words of that speech, a piece at a time
         case toolCall(id: String?, name: String, arguments: [String: Any])
         case answerComplete                 // every word and sound of the answer has arrived
+        case interrupted                    // Gemini heard you cut in and stopped talking
         case closed
     }
 
@@ -95,6 +96,11 @@ final class GeminiLive {
         }
         // "generationComplete" arrives once everything is sent. "turnComplete" comes seconds
         // later, when Gemini assumes playback has finished, so it isn't used.
+        // Gemini stops generating when it decides you spoke over it. Without this the app
+        // waits for an answer that will never finish arriving.
+        if content["interrupted"] as? Bool == true {
+            continuation.yield(.interrupted)
+        }
         if content["generationComplete"] as? Bool == true {
             continuation.yield(.answerComplete)
         }
