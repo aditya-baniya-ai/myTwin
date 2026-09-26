@@ -69,6 +69,24 @@ final class Subscription {
     }
 
     /// For someone who already paid on another device, or after reinstalling.
+#if DEBUG
+    /// Back to a free account, for testing. The Test Store has nothing to cancel against —
+    /// no Apple subscription exists — so this switches to a fresh RevenueCat user instead,
+    /// which is the closest thing to starting over without deleting the app.
+    func resetForTesting() async {
+        busy = true
+        problem = nil
+        defer { busy = false }
+        do {
+            let (info, _) = try await Purchases.shared.logIn(UUID().uuidString)
+            isPro = info.entitlements[Self.entitlement]?.isActive == true
+            if isPro { problem = "Still Pro: the purchase followed the new account." }
+        } catch {
+            problem = error.localizedDescription
+        }
+    }
+#endif
+
     func restore() async {
         busy = true
         problem = nil

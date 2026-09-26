@@ -325,6 +325,9 @@ struct ContentView: View {
     private var youPage: some View {
         page("You", tab: .you) {
             proRow
+#if DEBUG
+            proResetRow
+#endif
             connections
             if health.isAuthorized {
                 DashboardSection(title: "What myTwin can read") {
@@ -362,6 +365,19 @@ struct ContentView: View {
         }
         .buttonStyle(.plain)
     }
+
+#if DEBUG
+    /// A way back to the free app while testing, since a Test Store purchase can't be cancelled.
+    @ViewBuilder private var proResetRow: some View {
+        if pro.isPro {
+            Button("Reset to free (testing)") { Task { await pro.resetForTesting() } }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.leading, 4)
+        }
+    }
+#endif
 
     /// The same frame around every page but Dash's: a title, then cards.
     private func page<Content: View>(_ title: String, tab pageTab: TwinTab, @ViewBuilder content: () -> Content) -> some View {
