@@ -18,6 +18,7 @@ struct ContentView: View {
     @State private var showPaywall = false
     @State private var showCustomerCentre = false
     @State private var showShowcase = false
+    @State private var showVoicePicker = false
     @State private var showChat = false
     @State private var askGemini = false
     /// Moved on at the top of each hour, when the drain curve and the widget move on.
@@ -100,6 +101,9 @@ struct ContentView: View {
             .task { await pro.watchForChanges() }
             .onChange(of: pro.isPro, initial: true) { chat.proEnabled = pro.isPro }
             .sheet(isPresented: $showShowcase) { AvatarShowcase() }
+            .sheet(isPresented: $showVoicePicker) {
+                VoicePicker(voice: voice, isPro: pro.isPro)
+            }
             .sheet(isPresented: $showPaywall) { ProPaywall(pro: pro) }
             .sheet(isPresented: $showCustomerCentre) { ProCustomerCentre() }
             .refreshable {
@@ -344,6 +348,7 @@ struct ContentView: View {
     /// What myTwin is connected to and what it can actually read.
     private var youPage: some View {
         page("You", tab: .you) {
+            voiceRow
             proRow
 #if DEBUG
             proResetRow
@@ -358,6 +363,31 @@ struct ContentView: View {
                 Text(error).font(.footnote).foregroundStyle(.red)
             }
         }
+    }
+
+    /// How Dash sounds, in both modes.
+    private var voiceRow: some View {
+        Button {
+            showVoicePicker = true
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "waveform")
+                    .font(.title3)
+                    .foregroundStyle(BrandTitle.brand[0])
+                    .frame(width: 26)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Dash's voice")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Try the voices and pick one")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            }
+            .dashboardCard()
+        }
+        .buttonStyle(.plain)
     }
 
     /// Your plan: the paywall when you don't have Pro, RevenueCat's Customer Center when you do.

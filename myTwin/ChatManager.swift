@@ -28,7 +28,8 @@ final class ChatManager {
         geminiChat = GeminiChat(access: gemini, voice: voice, calendar: calendar, health: health)
         // Wording tested against Apple's safety filter: giving the assistant a name plus the date
         // got calendar questions blocked, and without the rules about saving the model claimed it
-        // had changed events.
+        // had changed events. The name alone is fine, and without it the model invented one
+        // ("Justin AI") when asked. Tested on the Mac: naming it changed no other answer.
         session = LanguageModelSession(
             tools: [
                 TodayEventsTool(calendar: calendar),
@@ -38,6 +39,9 @@ final class ChatManager {
                 HealthSummaryTool(health: health),
             ],
             instructions: """
+            You are the user's own assistant in the myTwin app, and your name is myTwin.
+            When the user asks your name, or who or what you are, reply exactly: I'm myTwin, your energy twin.
+            Never begin any other answer with your name.
             Help the user plan their day.
             Use getTodayEvents to answer questions about today's schedule, and only mention events it returns.
             Use getHealthSummary to answer questions about sleep, heart rate, HRV, steps or energy, and only use numbers it returns.
