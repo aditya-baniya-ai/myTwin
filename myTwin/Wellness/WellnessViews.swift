@@ -134,6 +134,9 @@ struct RescueDayView: View {
     @State private var proposal: RescueProposal?
     @State private var problem: String?
     @State private var saving = false
+    /// Off: the next free time. On: the user picks when, and the first free slot from then is used.
+    @State private var choosingTime = false
+    @State private var preferredStart = Date.now
 
     private var originals: [PlannedAction] {
         daily.actions.filter { $0.tracksOutcome != false && $0.start > now() && !$0.skipped && $0.completedAt == nil &&
@@ -156,6 +159,12 @@ struct RescueDayView: View {
                         }
                         Picker("Time I have", selection: $minutes) {
                             ForEach([5, 10, 15, 20, 30, 45, 60], id: \.self) { Text("\($0) min").tag($0) }
+                        }
+                        Toggle("Choose the time", isOn: $choosingTime)
+                        if choosingTime {
+                            DatePicker("Start", selection: $preferredStart,
+                                       in: now()...max(now(), daily.preferences.bedtime(on: now())),
+                                       displayedComponents: .hourAndMinute)
                         }
                     }.dashboardCard()
                     if let evidence = daily.evidence(for: movement) { Text(evidence).font(.footnote).foregroundStyle(.secondary) }
@@ -194,10 +203,16 @@ struct RescueDayView: View {
                 minutes = initialMinutes ?? daily.preferences.minutes
                 movement = daily.currentCheckIn == .low && daily.suggestedMovement == .strength ? .stretch : daily.suggestedMovement
                 selected = originals.first?.id
+                // Suggest the next quarter hour, a time people actually pick.
+                let quarter = 15 * 60.0
+                preferredStart = Date(timeIntervalSinceReferenceDate:
+                    (now().timeIntervalSinceReferenceDate / quarter).rounded(.up) * quarter)
             }
             .onChange(of: minutes) { proposal = nil }
             .onChange(of: movement) { proposal = nil }
             .onChange(of: selected) { proposal = nil }
+            .onChange(of: choosingTime) { proposal = nil }
+            .onChange(of: preferredStart) { proposal = nil }
         }
     }
     private func timeline(_ label: String, title: String, start: Date, end: Date, tint: Color) -> some View {
@@ -217,12 +232,18 @@ struct RescueDayView: View {
             .map { DateInterval(start: $0.start, end: $0.end) }
         withAnimation(.snappy) {
             proposal = RescuePlanner.propose(original: original, busy: busy, movement: movement, minutes: minutes,
-                                              preferences: daily.preferences, now: now(), energy: daily.currentCheckIn)
+                                              preferences: daily.preferences, now: now(), energy: daily.currentCheckIn,
+                                              preferred: choosingTime ? preferredStart : nil)
         }
         problem = proposal == nil ? "There isn't a free gap before bedtime. Try a shorter activity or keep today clear." : nil
     }
     private func confirm(_ preview: RescueProposal) {
         guard !saving, allowed() else { return }
+        if !daily.isSample, preview.replacement.start < now() {
+            self.preview()
+            if proposal != nil { problem = "That time passed while you were deciding. Here's a fresh one; confirm again." }
+            return
+        }
         saving = true
         defer { saving = false }
         do {

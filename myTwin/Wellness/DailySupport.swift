@@ -197,18 +197,22 @@ struct RescueProposal: Identifiable {
 }
 
 enum RescuePlanner {
+    /// `preferred` is a start time the user picked. The first free slot at or after it is
+    /// used, and the reason says so if it had to move; without one, the next free slot.
     static func propose(original: PlannedAction?, busy: [DateInterval], movement: Movement,
                         minutes: Int, preferences: PlanningPreferences, now: Date,
-                        energy: ReportedEnergy?) -> RescueProposal? {
+                        energy: ReportedEnergy?, preferred: Date? = nil) -> RescueProposal? {
         let duration = TimeInterval(min(max(minutes, 5), 60) * 60)
         let bedtime = preferences.bedtime(on: now)
         guard bedtime > now else { return nil }
         let calendar = Calendar.current
+        let earliest = max(now, preferred ?? now)
         // Align to the next five-minute boundary, without excluding an exactly aligned time.
-        let minute = calendar.dateInterval(of: .minute, for: now)?.start ?? now
+        let minute = calendar.dateInterval(of: .minute, for: earliest)?.start ?? earliest
         let offset = (5 - calendar.component(.minute, from: minute) % 5) % 5
         var start = minute.addingTimeInterval(Double(offset) * 60)
-        if start < now { start.addTimeInterval(300) }
+        if start < earliest { start.addTimeInterval(300) }
+        let wanted = start
         while start.addingTimeInterval(duration) <= bedtime {
             let end = start.addingTimeInterval(duration)
             if !busy.contains(where: { $0.start < end && $0.end > start }) {
@@ -216,8 +220,12 @@ enum RescuePlanner {
                 let action = PlannedAction(eventID: original?.eventID, movement: movement, title: title,
                                            start: start, end: end, beforeTitle: original?.title,
                                            reportedEnergy: energy, isRescue: true)
-                let why = energy == .low ? "You said your energy is low. This shorter option fits a free gap and ends before bedtime."
+                var why = energy == .low ? "You said your energy is low. This shorter option fits a free gap and ends before bedtime."
                     : "This option fits the time you chose, keeps your fixed commitments, and ends before bedtime."
+                if preferred != nil, start != wanted {
+                    let clock = { (date: Date) in date.formatted(date: .omitted, time: .shortened) }
+                    why = "\(clock(wanted)) is taken, so this is the next free time after it. " + why
+                }
                 return RescueProposal(original: original, replacement: action, reason: why, bedtime: bedtime)
             }
             start.addTimeInterval(300)
