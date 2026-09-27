@@ -96,8 +96,6 @@ morning briefing, a heads-up ten minutes before each event, and a bedtime nudge.
   distinction between estimates and self-reported energy.
 - **Activity outcomes:** record Better / Same / Worse or skip. Repeated feedback can
   suggest another activity; small-sample associations are labelled as such.
-- **Share with Dash:** preview a rendered card and use the native share sheet. Personal
-  event titles and times are hidden by default; sample cards are marked SAMPLE DAY.
 
 Choose **Try a sample day** on onboarding or the You tab. The launch argument
 `--sample-day` also opens it for a demo or UI test.

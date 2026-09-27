@@ -31,7 +31,7 @@ final class SampleDayTests: XCTestCase {
         okay.tap()
         XCTAssertTrue(app.buttons["Rescue my day"].exists)
     }
-    @MainActor func testSamplePreferencesOutcomeAndSharePreview() {
+    @MainActor func testSamplePreferencesAndOutcome() {
         let app = XCUIApplication()
         app.launchArguments = ["--sample-day"]
         app.launch()
@@ -53,17 +53,7 @@ final class SampleDayTests: XCTestCase {
         XCTAssertTrue(better.isHittable)
         better.tap()
         XCTAssertTrue(app.staticTexts["You reported feeling better."].exists)
-        app.buttons["Share my moment"].firstMatch.tap()
-        XCTAssertTrue(app.staticTexts["SAMPLE DAY"].waitForExistence(timeout: 5))
-        XCTAssertEqual(app.switches["Include the activity's title and time"].value as? String, "0")
-        let share = app.buttons["Share card"]
-        for _ in 0..<3 where !share.isHittable { app.swipeUp() }
-        XCTAssertTrue(share.waitForExistence(timeout: 5))
-        let screenshot = XCTAttachment(screenshot: app.screenshot())
-        screenshot.name = "Private sample share card"; screenshot.lifetime = .keepAlways; add(screenshot)
-        // Open the native sheet, but never select a recipient or send anything.
-        share.tap()
-        XCTAssertTrue(app.cells["Copy"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["Share my moment"].exists, "sharing was removed")
     }
 
 }

@@ -12,7 +12,6 @@ struct ContentView: View {
     @State private var showRescue = false
     @State private var pendingRescue = false
     @State private var rescueMinutes: Int?
-    @State private var sharedAction: PlannedAction?
     @State private var undoAction: PlannedAction?
     @State private var undoOriginal: PlannedAction?
     @State private var planningProblem: String?
@@ -186,7 +185,6 @@ struct ContentView: View {
                 Task { await reschedule() }
             }
         }
-        .sheet(item: $sharedAction) { DashShareView(action: $0, isSample: isSample) }
         .onChange(of: calendar.revision) { Task { await reschedule() } }
         .onReceive(NotificationCenter.default.publisher(for: .EKEventStoreChanged)) { _ in
             guard !isSample else { return }
@@ -252,7 +250,7 @@ struct ContentView: View {
                 if isSample { sampleBanner }
                 twinContent.frame(height: 420)
                 supportCard
-                ActionFeedbackView(daily: daily, now: planningNow) { sharedAction = $0 }
+                ActionFeedbackView(daily: daily, now: planningNow)
 
                 if fullAccess && hasPrediction {
                     tabLink("Predictions", tab: .predictions) {
@@ -921,11 +919,7 @@ struct ContentView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Label(isSample ? "Sample plan updated" : "Calendar updated", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
                     Text("\(action.title) · \(timeRangeText(action.start, action.end))").font(.subheadline)
-                    HStack {
-                        Button("Undo change") { undoRescue(action) }
-                        Spacer()
-                        Button("Share my plan") { sharedAction = action }
-                    }
+                    Button("Undo change") { undoRescue(action) }
                 }.dashboardCard()
             }
             if let planningProblem { Text(planningProblem).foregroundStyle(.red).font(.footnote) }

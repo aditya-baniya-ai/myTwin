@@ -258,7 +258,6 @@ struct RescueDayView: View {
 struct ActionFeedbackView: View {
     let daily: DailySupport
     let now: Date
-    let share: (PlannedAction) -> Void
     private var recent: [PlannedAction] {
         daily.actions.filter { $0.tracksOutcome != false && $0.start <= now && $0.end > now.addingTimeInterval(-2 * 86400) }
             .sorted { $0.start > $1.start }
@@ -273,7 +272,6 @@ struct ActionFeedbackView: View {
                     if action.skipped { Text("Skipped — no problem. Another day, another plan.").font(.subheadline) }
                     else if let outcome = action.outcome {
                         Text("You reported feeling \(outcome.title.lowercased()).").font(.subheadline)
-                        Button("Share my moment", systemImage: "square.and.arrow.up") { share(action) }
                     } else {
                         Text("Did you do this activity? If so, how do you feel now?").font(.subheadline)
                         HStack {
@@ -287,69 +285,5 @@ struct ActionFeedbackView: View {
                 }.dashboardCard()
             }
         }
-    }
-}
-
-struct DashShareView: View {
-    @Environment(\.dismiss) private var dismiss
-    let action: PlannedAction
-    let isSample: Bool
-    @State private var includeDetails = false
-    @State private var file: URL?
-    @State private var image: UIImage?
-    @State private var error: String?
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 16) {
-                    card.frame(maxWidth: 360)
-                    Toggle("Include the activity's title and time", isOn: $includeDetails)
-                    Text("Health numbers and calendar details are hidden by default. Preview before sharing.")
-                        .font(.caption).foregroundStyle(.secondary)
-                    if let file, let image {
-                        ShareLink(item: file, preview: SharePreview("My day with Dash", image: Image(uiImage: image))) {
-                            Label("Share card", systemImage: "square.and.arrow.up")
-                        }.buttonStyle(.borderedProminent)
-                    }
-                    if let error { Text(error).foregroundStyle(.red) }
-                }.padding()
-            }
-            .navigationTitle("My day with Dash")
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
-            .task { render() }
-            .onChange(of: includeDetails) { render() }
-        }
-    }
-    private var card: some View {
-        VStack(spacing: 12) {
-            Text("myTwin").font(.title.bold()).foregroundStyle(.cyan)
-            if isSample { Text("SAMPLE DAY").font(.caption.bold()).foregroundStyle(.orange) }
-            Image("Dash_normal").resizable().scaledToFit().frame(height: 220)
-            Text(action.completedAt != nil ? "Plan changed. Still showed up." : "A smaller plan still counts.")
-                .font(.title2.bold()).multilineTextAlignment(.center)
-            Text(includeDetails ? action.title : action.movement.title).font(.headline)
-            Text("\(Int(action.end.timeIntervalSince(action.start) / 60)) minutes for myself")
-            if includeDetails { Text(timeRangeText(action.start, action.end)).font(.caption) }
-            Text(action.completedAt != nil ? "Activity completed · self-reported" : "Activity planned · one step at a time")
-                .font(.caption).foregroundStyle(.white.opacity(0.8))
-        }
-        .padding(24).frame(width: 360)
-        .foregroundStyle(.white)
-        .background(LinearGradient(colors: [.indigo, Color(red: 0.06, green: 0.06, blue: 0.15)], startPoint: .topLeading, endPoint: .bottomTrailing))
-        .clipShape(RoundedRectangle(cornerRadius: 28))
-    }
-    @MainActor private func render() {
-        file = nil
-        image = nil
-        let renderer = ImageRenderer(content: card)
-        renderer.scale = 3
-        guard let output = renderer.uiImage, let data = output.pngData() else { error = "Couldn't create the card. Please reopen this screen."; return }
-        do {
-            let url = FileManager.default.temporaryDirectory.appending(path: "Dash-\(UUID().uuidString).png")
-            try data.write(to: url, options: .atomic)
-            file = url
-            image = output
-            error = nil
-        } catch { self.error = "Couldn't save the share card. Please try again." }
     }
 }

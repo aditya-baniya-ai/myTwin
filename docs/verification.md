@@ -85,8 +85,7 @@ These are not covered by fictional sample-mode UI tests:
 Open **Try a sample day**, show the fictional-data label, then **Why this plan?**.
 Choose how you feel, open **Rescue my day**, preview the shorter activity, confirm and
 show **Undo change**. Open **Make it yours** to demonstrate preferences. Mark the
-sample walk **Better**, then **Share my moment** to show the private card and native
-share sheet. Exit sample mode to show the real connection and Pro screens.
+sample walk **Better**. Exit sample mode to show the real connection and Pro screens.
 
 ## Re-run
 
