@@ -125,7 +125,7 @@ struct RescueDayView: View {
     let calendar: CalendarManager
     let events: () -> [PlanItem]
     let now: () -> Date
-    let allowed: Bool
+    let allowed: () -> Bool
     var initialMinutes: Int? = nil
     let confirmed: (PlannedAction, PlannedAction?) -> Void
     @State private var minutes = 20
@@ -164,7 +164,7 @@ struct RescueDayView: View {
                     }
                     Button("Preview my rescue", systemImage: "wand.and.stars") { preview() }
                         .buttonStyle(.borderedProminent)
-                        .disabled(!allowed)
+                        .disabled(!allowed())
                     if let proposal {
                         VStack(alignment: .leading, spacing: 14) {
                             Text("Your proposed change").font(.headline)
@@ -178,12 +178,12 @@ struct RescueDayView: View {
                             Text("Fixed appointments stay where they are. Only myTwin activities shown above can change.")
                                 .font(.caption).foregroundStyle(.secondary)
                             Button(saving ? "Saving…" : (daily.isSample ? "Confirm sample change" : "Confirm calendar change")) { confirm(proposal) }
-                                .buttonStyle(.borderedProminent).disabled(saving || !allowed)
+                                .buttonStyle(.borderedProminent).disabled(saving || !allowed())
                         }.dashboardCard()
                         .transition(.opacity.combined(with: .move(edge: .bottom)))
                     }
                     if let problem { Text(problem).foregroundStyle(.red).accessibilityIdentifier("rescueError") }
-                    if !allowed { Text("Your first rescue is free. Further rescues are included with Pro.") }
+                    if !allowed() { Text("Rescue my day requires myTwin Pro.") }
                     Text("This changes a plan, not your measured energy. You can undo a saved rescue on the dashboard.")
                         .font(.caption).foregroundStyle(.secondary)
                 }.padding(20)
@@ -222,7 +222,7 @@ struct RescueDayView: View {
         problem = proposal == nil ? "There isn't a free gap before bedtime. Try a shorter activity or keep today clear." : nil
     }
     private func confirm(_ preview: RescueProposal) {
-        guard !saving, allowed else { return }
+        guard !saving, allowed() else { return }
         saving = true
         defer { saving = false }
         do {

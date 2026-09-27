@@ -130,21 +130,26 @@ struct ContentView: View {
             .onAppear {
                 chat.rescueDay = { minutes in rescueMinutes = minutes; openRescue() }
                 chat.planSource.summary = { [self] in
-                    guard pro.isPro else { return "Adaptive plans and hour-by-hour forecasts require myTwin Pro. The first Rescue my day is free; the user can open it from Dash." }
+                    guard pro.isPro else { return "Adaptive plans and hour-by-hour forecasts require myTwin Pro. Rescue my day also requires an active myTwin Pro entitlement." }
                     guard hasPrediction else { return "No measured forecast yet. The user can report how they feel and use Rescue my day to choose an activity." }
                     return TodayPlanText.summary(.init(dayStart: dayStart, bedtime: bedtimeDate,
                         events: currentEvents, dismissed: dismissed, trainedToday: trainedToday,
                         easyDay: easyDay, preferences: effectivePreferences))
                 }
             }
-            .onChange(of: pro.isPro, initial: true) { chat.proEnabled = pro.isPro }
+            .onChange(of: pro.isPro, initial: true) {
+                chat.proEnabled = pro.isPro
+                if !canRescue { showRescue = false }
+            }
             .onChange(of: gemini.allowed) { if gemini.allowed != true { chat.endGemini() } }
             .sheet(isPresented: $showShowcase) { AvatarShowcase() }
             .sheet(isPresented: $showVoicePicker) {
                 VoicePicker(voice: voice, isPro: pro.isPro)
             }
             .sheet(isPresented: $showPaywall, onDismiss: {
-                if pendingRescue && pro.isPro { pendingRescue = false; showRescue = true }
+                let resumeRescue = pendingRescue && pro.isPro
+                pendingRescue = false
+                if resumeRescue { showRescue = true }
             }) { ProPaywall(pro: pro) }
             .sheet(isPresented: $showPreferences) {
                 PlanningPreferencesView(preferences: daily.preferences) { value in
@@ -163,7 +168,7 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showRescue) {
                 RescueDayView(daily: daily, calendar: calendar, events: { currentEvents },
-                              now: { planningNow }, allowed: canRescue, initialMinutes: rescueMinutes) { action, original in
+                              now: { planningNow }, allowed: { canRescue }, initialMinutes: rescueMinutes) { action, original in
                     undoAction = action
                     undoOriginal = original
                     dashGesture = AvatarGesture.all.first { $0.clip == "wave" }
@@ -453,7 +458,9 @@ struct ContentView: View {
             .pickerStyle(.segmented)
             .labelsHidden()
             if isSample { sampleBanner }
-            Button("Rescue my day", systemImage: "wand.and.stars") { openRescue() }.buttonStyle(.borderedProminent)
+            if canRescue {
+                Button("Rescue my day", systemImage: "wand.and.stars") { openRescue() }.buttonStyle(.borderedProminent)
+            }
             if planSpan == .day { plan } else if isSample {
                 Text("Sample mode shows one fictional day. Your real week is available after connecting Calendar.")
             } else { weekPlan }
@@ -826,7 +833,7 @@ struct ContentView: View {
     private var planningNow: Date { isSample ? SampleDay.now : .now }
     private var fullAccess: Bool { isSample || pro.isPro }
     private var hasPrediction: Bool { energy != nil }
-    private var canRescue: Bool { fullAccess || !daily.usedFreeRescue }
+    private var canRescue: Bool { daily.canRescue(proEnabled: pro.isPro) }
     private var easyDay: Bool { daily.currentCheckIn.map { $0 == .low } ?? (energy?.band == .below) }
     private var effectivePreferences: PlanningPreferences {
         var value = daily.preferences
@@ -870,11 +877,13 @@ struct ContentView: View {
     private var supportCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             checkInCard
-            Button { openRescue() } label: {
-                Label("Rescue my day", systemImage: "wand.and.stars").font(.headline).frame(maxWidth: .infinity)
-            }.buttonStyle(.borderedProminent).controlSize(.large)
-            Text(canRescue ? "A plan that fits how you feel. Preview every change." : "Your first rescue is done. Keep adapting with Pro.")
-                .font(.caption).foregroundStyle(.secondary)
+            if canRescue {
+                Button { openRescue() } label: {
+                    Label("Rescue my day", systemImage: "wand.and.stars").font(.headline).frame(maxWidth: .infinity)
+                }.buttonStyle(.borderedProminent).controlSize(.large)
+                Text("A plan that fits how you feel. Preview every change.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             HStack {
                 Button("Why this plan?") { showExplanation = true }
                 Spacer()

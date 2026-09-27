@@ -58,7 +58,7 @@ struct PaywallView: View {
                             "A workout in your strongest free hour, a nap at the dip, the last coffee that still clears before bed.")
                     benefit("waveform", "Dash talks back",
                             "A natural voice and smarter answers about your sleep, energy and plans.")
-                    benefit("arrow.triangle.2.circlepath", "Rescue a busy day",
+                    benefit("arrow.triangle.2.circlepath", "Rescue my day",
                             "Adapt a flexible activity to your time and preferences, with confirmation and undo.")
                 }
                 .padding(16)

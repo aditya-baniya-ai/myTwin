@@ -2,6 +2,18 @@ import XCTest
 @testable import myTwin
 
 final class DailySupportTests: XCTestCase {
+    @MainActor func testRescueRequiresProExceptFictionalSample() {
+        let name = "myTwinTests.\(UUID())"
+        let defaults = UserDefaults(suiteName: name)!
+        defer { defaults.removePersistentDomain(forName: name) }
+        let personal = DailySupport(defaults: defaults)
+        XCTAssertFalse(personal.canRescue(proEnabled: false), "No first free rescue")
+        XCTAssertTrue(personal.canRescue(proEnabled: true))
+        personal.save(PlannedAction(movement: .walk, title: "Walk", start: .now,
+                                   end: .now.addingTimeInterval(600), isRescue: true))
+        XCTAssertFalse(personal.canRescue(proEnabled: false), "Previous use cannot bypass expired Pro")
+        XCTAssertTrue(DailySupport(isSample: true, defaults: defaults).canRescue(proEnabled: false))
+    }
     @MainActor func testSampleCannotWritePersonalPreferencesOrHistory() {
         let name = "myTwinTests.\(UUID())"
         let defaults = UserDefaults(suiteName: name)!
@@ -32,10 +44,8 @@ final class DailySupportTests: XCTestCase {
         daily.save(replacement, replacing: original)
         let restored = DailySupport(defaults: defaults)
         XCTAssertEqual(restored.actions, [replacement])
-        XCTAssertTrue(restored.usedFreeRescue)
         restored.undo(replacement, restoring: original)
         XCTAssertEqual(restored.actions, [original])
-        XCTAssertFalse(restored.usedFreeRescue)
         XCTAssertEqual(DailySupport(defaults: defaults).actions, [original])
     }
     @MainActor func testRepeatedOutcomeEvidenceAndSkip() {

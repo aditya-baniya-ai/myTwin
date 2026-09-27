@@ -103,7 +103,6 @@ final class DailySupport {
     var preferences: PlanningPreferences
     private(set) var checkIn: EnergyCheckIn?
     private(set) var actions: [PlannedAction]
-    private(set) var usedFreeRescue: Bool
     var problem: String?
     private let defaults: UserDefaults
 
@@ -115,10 +114,8 @@ final class DailySupport {
            let saved = try? JSONDecoder().decode(Saved.self, from: data) {
             checkIn = saved.checkIn
             actions = saved.actions
-            usedFreeRescue = saved.usedFreeRescue
         } else {
             actions = []
-            usedFreeRescue = false
         }
         if isSample {
             let now = SampleDay.now
@@ -129,6 +126,9 @@ final class DailySupport {
                                      end: now.addingTimeInterval(-2400))]
         }
     }
+    /// The fictional demo never writes to a real calendar. Personal rescues require Pro.
+    func canRescue(proEnabled: Bool) -> Bool { isSample || proEnabled }
+
     var currentCheckIn: ReportedEnergy? {
         guard let checkIn, Calendar.current.isDate(checkIn.date, inSameDayAs: isSample ? SampleDay.now : .now) else { return nil }
         return checkIn.energy
@@ -145,14 +145,11 @@ final class DailySupport {
         if let old { actions.removeAll { $0.id == old.id } }
         actions.removeAll { $0.id == action.id }
         actions.append(action)
-        if action.isRescue { usedFreeRescue = true }
         persist()
     }
     func undo(_ action: PlannedAction, restoring old: PlannedAction?) {
         actions.removeAll { $0.id == action.id }
         if let old { actions.append(old) }
-        // Undo does not consume the first free rescue.
-        usedFreeRescue = actions.contains { $0.isRescue }
         persist()
     }
     func finish(_ action: PlannedAction, outcome: ActionOutcome?, skipped: Bool = false) {
@@ -181,12 +178,11 @@ final class DailySupport {
     private struct Saved: Codable {
         let checkIn: EnergyCheckIn?
         let actions: [PlannedAction]
-        let usedFreeRescue: Bool
     }
     private func persist() {
         guard !isSample else { return }
         do {
-            let data = try JSONEncoder().encode(Saved(checkIn: checkIn, actions: actions, usedFreeRescue: usedFreeRescue))
+            let data = try JSONEncoder().encode(Saved(checkIn: checkIn, actions: actions))
             defaults.set(data, forKey: "daily.support.v1")
         } catch { problem = "Your changes could not be saved. Please try again." }
     }

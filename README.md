@@ -88,8 +88,8 @@ morning briefing, a heads-up ten minutes before each event, and a bedtime nudge.
 
 - **Rescue my day:** choose an activity and time, preview the before/after change,
   confirm it, and undo from the dashboard. Only app-created, unchanged, writable,
-  nonrecurring activities can be replaced; fixed events remain busy. One rescue is
-  free, with further rescues in Pro.
+  nonrecurring activities can be replaced; fixed events remain busy. Rescue requires an active
+  Pro entitlement; fictional sample mode remains available for demonstrations.
 - **Sample day and preferences:** try fictional data without granting health/calendar
   access. Choose activity, equipment, duration, bedtime, optional goals, and reminders.
 - **Why this plan:** inspect measured sleep, recent baseline, missing data, and the

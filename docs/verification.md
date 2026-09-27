@@ -6,8 +6,7 @@ Base commit: `001a7b174a1b75499f9100508691313a6e0ca884`.
 ## Implemented
 
 1. Rescue my day: activity/duration choice, calendar-gap preview, explicit confirmation,
-   ownership and conflict checks, and dashboard undo. The first rescue is free; further
-   rescues require Pro. Only app-owned, unchanged, nonrecurring activities can be replaced.
+   ownership and conflict checks, and dashboard undo. Rescue is Pro-only in the personal app; the fictional demo remains available. Only app-owned, unchanged, nonrecurring activities can be replaced.
 2. Fictional sample day, available from onboarding or You, plus activity, equipment,
    duration, bedtime, optional goal and reminder preferences. Manual energy check-ins
    work without a watch. Sample changes stay in memory.
@@ -106,3 +105,16 @@ local derived CSV and dependencies documented in `ml/README.md`.
 Research runtime used: Python 3.10.11, NumPy 1.26.4, pandas 2.2.3,
 SciPy 1.15.1 and scikit-learn 1.6.1. Current model SHA-256:
 `f36682db8e38dcc84e7772cdf12a37822948d803dfcf9a4eabde44470f1a2b55`.
+
+## Pro-only rescue follow-up
+
+Rescue now requires the existing RevenueCat `mytwin_pro` entitlement in personal
+mode. Its Home and Plan buttons are hidden for free users, the first-free-rescue
+allowance has been removed, and chat/voice requests direct free users to the paywall.
+Confirmation rechecks current access, and losing Pro dismisses an open rescue screen.
+The fictional sample demo remains available without a subscription.
+
+Validation: 13 unit tests passed, including the new free/Pro/expired-Pro access
+regression; the rescue UI test passed. The unrelated native share-sheet test timed
+out on the first run, then passed unchanged in isolation. Results:
+`/tmp/mytwin-pro-rescue-tests.xcresult` and `/tmp/mytwin-pro-share-retry.xcresult`.

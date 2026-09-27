@@ -73,12 +73,14 @@ final class ChatManager {
 
         if let request = RescueIntent.parse(text), let rescueDay {
             rescueDay(request.minutes)
-            messages.append(ChatMessage(isUser: false, text: "Let's find a manageable option. Review the rescue preview and confirm before anything changes."))
+            messages.append(ChatMessage(isUser: false, text: proEnabled
+                ? "Let's find a manageable option. Review the rescue preview and confirm before anything changes."
+                : "Rescue my day is included with myTwin Pro. Upgrade to preview and confirm a rescue."))
             return
         }
         if proEnabled, gemini.isActive, await answerWithGemini(text) { return }
         guard case .available = SystemLanguageModel.default.availability else {
-            messages.append(ChatMessage(isUser: false, text: "On-device chat isn't available here. You can still check in and use Rescue my day on the Dash screen."))
+            messages.append(ChatMessage(isUser: false, text: "On-device chat isn't available here. You can still check in on the Dash screen. Rescue my day is available with Pro."))
             return
         }
 
