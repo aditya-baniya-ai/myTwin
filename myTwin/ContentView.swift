@@ -136,6 +136,9 @@ struct ContentView: View {
                         events: currentEvents, dismissed: dismissed, trainedToday: trainedToday,
                         easyDay: easyDay, preferences: effectivePreferences))
                 }
+                chat.planSource.weekRecap = { [self] in
+                    WeekRecap.text(history: signalHistory, model: energyModel)
+                }
             }
             .onChange(of: pro.isPro, initial: true) { chat.proEnabled = pro.isPro }
             .onChange(of: gemini.allowed) { if gemini.allowed != true { chat.endGemini() } }
@@ -376,6 +379,24 @@ struct ContentView: View {
         .accessibilityHint("Shows every energy state and gesture")
     }
 
+    /// The week as a few sentences rather than a chart. Hidden until there are enough
+    /// nights to say something true.
+    @ViewBuilder private var weekRecap: some View {
+        let lines = energyModel.map { WeekRecap.lines(history: signalHistory, model: $0) } ?? []
+        if !lines.isEmpty {
+            DashboardSection(title: "Your week") {
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(lines, id: \.self) { line in
+                        Text(line)
+                            .font(.subheadline)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .dashboardCard()
+            }
+        }
+    }
+
     private var predictionsPage: some View {
         page("Predictions", tab: .predictions) {
             if fullAccess && hasPrediction {
@@ -394,6 +415,7 @@ struct ContentView: View {
             if health.isAuthorized, !week.isEmpty {
                 DashboardSection(title: "Your last 7 days") { WeekStrip(days: week).dashboardCard() }
             }
+            weekRecap
             if !isSample { oftenAsked }
         }
     }
