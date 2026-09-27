@@ -80,168 +80,157 @@ struct ContentView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollView(.horizontal) {
-                HStack(spacing: 0) {
-                    ForEach(TwinTab.allCases) { page in
-                        view(for: page)
-                            .containerRelativeFrame(.horizontal)
-                            .id(page)
+        // Swipe between the pages, or tap the bar. A paging TabView rather than a paging
+        // ScrollView: after switching between the sample and your own day, the ScrollView
+        // came back drawn a bar-height lower than where it took taps.
+        TabView(selection: $tab) {
+            ForEach(TwinTab.allCases) { page in
+                view(for: page).tag(page)
+            }
+        }
+        .tabViewStyle(.page(indexDisplayMode: .never))
+        .background { BatteryBackdrop(energy: charge * 100) }
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            // Next to the chat button: how he sounds, without going to the You page.
+            Button("Dash's voice", systemImage: "waveform") {
+                showVoicePicker = true
+            }
+            if !isSample {
+                Button("Ask myTwin", systemImage: "bubble.left.and.text.bubble.right") { showChat = true }
+            }
+        }
+        .sheet(isPresented: $loggingWeight) {
+            LogWeightSheet(last: weights.last?.pounds, goal: daily.preferences.weightGoal) { pounds in
+                try await health.logWeight(pounds: pounds)
+                weights = await health.weights()
+            }
+        }
+        .sheet(isPresented: $askGemini) {
+            GeminiPermissionSheet { gemini.allowed = $0 }
+        }
+        .navigationDestination(isPresented: $showChat) {
+            ChatView(chat: chat, voice: voice)
+        }
+        .safeAreaInset(edge: .bottom) { bottomBar }
+        .task {
+            if isSample { await updateEnergy(); return }
+            await pro.start()
+            askGemini = gemini.needsAnswer
+            await health.refreshAuthorizationState()
+            calendar.loadTodayEvents()
+            calendar.loadWeekEvents()
+            await updateEnergy()
+            await listen()
+        }
+        .task { await followTheHours() }
+        .task(id: tab) {
+            guard tab == .twin else { return }
+            try? await Task.sleep(for: .seconds(3))      // let the day load and him appear
+            while !Task.isCancelled {
+                await considerNudge()
+                try? await Task.sleep(for: .seconds(15 * 60))
+            }
+        }
+        .task { if !isSample { await pro.watchForChanges() } }
+        // Both models read today's plan through this, and only the screen knows the
+        // day's charge, bedtime and what has been dismissed.
+        .onAppear {
+            chat.rescueDay = { minutes in rescueMinutes = minutes; openRescue() }
+            chat.planSource.summary = { [self] in
+                guard pro.isPro else { return "Adaptive plans and hour-by-hour forecasts require myTwin Pro. Rescue my day also requires an active myTwin Pro entitlement." }
+                guard hasPrediction else { return "No measured forecast yet. The user can report how they feel and use Rescue my day to choose an activity." }
+                return TodayPlanText.summary(.init(dayStart: dayStart, bedtime: bedtimeDate,
+                    events: currentEvents, dismissed: dismissed, trainedToday: trainedToday,
+                    easyDay: easyDay, preferences: effectivePreferences))
+            }
+            chat.planSource.weekRecap = { [self] in
+                WeekRecap.text(history: signalHistory, model: energyModel)
+            }
+        }
+        .onChange(of: pro.isPro, initial: true) {
+            chat.proEnabled = pro.isPro
+            if !canRescue { showRescue = false }
+        }
+        .onChange(of: gemini.allowed) { if gemini.allowed != true { chat.endGemini() } }
+        .sheet(isPresented: $showShowcase) { AvatarShowcase() }
+        .sheet(isPresented: $showVoicePicker) {
+            VoicePicker(voice: voice, isPro: pro.isPro)
+        }
+        .sheet(isPresented: $showPaywall, onDismiss: {
+            let resumeRescue = pendingRescue && pro.isPro
+            pendingRescue = false
+            if resumeRescue { showRescue = true }
+        }) { ProPaywall(pro: pro) }
+        .sheet(isPresented: $showPreferences) {
+            PlanningPreferencesView(preferences: daily.preferences) { value in
+                daily.savePreferences(value)
+                Task {
+                    if !isSample && (value.morningReminder || value.eventReminders || value.bedtimeReminder) {
+                        await notifications.requestPermission()
                     }
-                }
-                .scrollTargetLayout()
-            }
-            .scrollTargetBehavior(.paging)
-            .scrollPosition(id: swiped)
-            .scrollIndicators(.hidden)
-            .background { BatteryBackdrop(energy: charge * 100) }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                // Next to the chat button: how he sounds, without going to the You page.
-                Button("Dash's voice", systemImage: "waveform") {
-                    showVoicePicker = true
-                }
-                if !isSample {
-                    Button("Ask myTwin", systemImage: "bubble.left.and.text.bubble.right") { showChat = true }
+                    await reschedule()
                 }
             }
-            .sheet(isPresented: $loggingWeight) {
-                LogWeightSheet(last: weights.last?.pounds, goal: daily.preferences.weightGoal) { pounds in
-                    try await health.logWeight(pounds: pounds)
-                    weights = await health.weights()
-                }
-            }
-            .sheet(isPresented: $askGemini) {
-                GeminiPermissionSheet { gemini.allowed = $0 }
-            }
-            .navigationDestination(isPresented: $showChat) {
-                ChatView(chat: chat, voice: voice)
-            }
-            .safeAreaInset(edge: .bottom) { bottomBar }
-            .task {
-                if isSample { await updateEnergy(); return }
-                await pro.start()
-                askGemini = gemini.needsAnswer
-                await health.refreshAuthorizationState()
-                calendar.loadTodayEvents()
-                calendar.loadWeekEvents()
-                await updateEnergy()
-                await listen()
-            }
-            .task { await followTheHours() }
-            .task(id: tab) {
-                guard tab == .twin else { return }
-                try? await Task.sleep(for: .seconds(3))      // let the day load and him appear
-                while !Task.isCancelled {
-                    await considerNudge()
-                    try? await Task.sleep(for: .seconds(15 * 60))
-                }
-            }
-            .task { if !isSample { await pro.watchForChanges() } }
-            // Both models read today's plan through this, and only the screen knows the
-            // day's charge, bedtime and what has been dismissed.
-            .onAppear {
-                chat.rescueDay = { minutes in rescueMinutes = minutes; openRescue() }
-                chat.planSource.summary = { [self] in
-                    guard pro.isPro else { return "Adaptive plans and hour-by-hour forecasts require myTwin Pro. Rescue my day also requires an active myTwin Pro entitlement." }
-                    guard hasPrediction else { return "No measured forecast yet. The user can report how they feel and use Rescue my day to choose an activity." }
-                    return TodayPlanText.summary(.init(dayStart: dayStart, bedtime: bedtimeDate,
-                        events: currentEvents, dismissed: dismissed, trainedToday: trainedToday,
-                        easyDay: easyDay, preferences: effectivePreferences))
-                }
-                chat.planSource.weekRecap = { [self] in
-                    WeekRecap.text(history: signalHistory, model: energyModel)
-                }
-            }
-            .onChange(of: pro.isPro, initial: true) {
-                chat.proEnabled = pro.isPro
-                if !canRescue { showRescue = false }
-            }
-            .onChange(of: gemini.allowed) { if gemini.allowed != true { chat.endGemini() } }
-            .sheet(isPresented: $showShowcase) { AvatarShowcase() }
-            .sheet(isPresented: $showVoicePicker) {
-                VoicePicker(voice: voice, isPro: pro.isPro)
-            }
-            .sheet(isPresented: $showPaywall, onDismiss: {
-                let resumeRescue = pendingRescue && pro.isPro
-                pendingRescue = false
-                if resumeRescue { showRescue = true }
-            }) { ProPaywall(pro: pro) }
-            .sheet(isPresented: $showPreferences) {
-                PlanningPreferencesView(preferences: daily.preferences) { value in
-                    daily.savePreferences(value)
-                    Task {
-                        if !isSample && (value.morningReminder || value.eventReminders || value.bedtimeReminder) {
-                            await notifications.requestPermission()
-                        }
-                        await reschedule()
-                    }
-                }
-            }
-            .sheet(isPresented: $showExplanation) {
-                EnergyExplanationView(history: signalHistory, reading: energy,
-                    checkIn: daily.currentCheckIn, isSample: isSample, report: recordCheckIn)
-            }
-            .sheet(isPresented: $showRescue) {
-                RescueDayView(daily: daily, calendar: calendar, events: { currentEvents },
-                              now: { planningNow }, allowed: { canRescue }, initialMinutes: rescueMinutes) { action, original in
-                    undoAction = action
-                    undoOriginal = original
-                    dashGesture = AvatarGesture.all.first { $0.clip == "wave" }
-                    Task { await reschedule() }
-                }
-            }
-            .sheet(item: $sharedAction) { DashShareView(action: $0, isSample: isSample) }
-            .onChange(of: calendar.revision) { Task { await reschedule() } }
-            .onReceive(NotificationCenter.default.publisher(for: .EKEventStoreChanged)) { _ in
-                guard !isSample else { return }
-                calendar.loadTodayEvents()
-                calendar.loadWeekEvents()
+        }
+        .sheet(isPresented: $showExplanation) {
+            EnergyExplanationView(history: signalHistory, reading: energy,
+                checkIn: daily.currentCheckIn, isSample: isSample, report: recordCheckIn)
+        }
+        .sheet(isPresented: $showRescue) {
+            RescueDayView(daily: daily, calendar: calendar, events: { currentEvents },
+                          now: { planningNow }, allowed: { canRescue }, initialMinutes: rescueMinutes) { action, original in
+                undoAction = action
+                undoOriginal = original
+                dashGesture = AvatarGesture.all.first { $0.clip == "wave" }
                 Task { await reschedule() }
             }
-            .sheet(isPresented: $showCustomerCentre) { ProCustomerCentre() }
-            .refreshable {
+        }
+        .sheet(item: $sharedAction) { DashShareView(action: $0, isSample: isSample) }
+        .onChange(of: calendar.revision) { Task { await reschedule() } }
+        .onReceive(NotificationCenter.default.publisher(for: .EKEventStoreChanged)) { _ in
+            guard !isSample else { return }
+            calendar.loadTodayEvents()
+            calendar.loadWeekEvents()
+            Task { await reschedule() }
+        }
+        .sheet(isPresented: $showCustomerCentre) { ProCustomerCentre() }
+        .refreshable {
+            guard !isSample else { return }
+            await health.refresh()
+            calendar.loadTodayEvents()
+            calendar.loadWeekEvents()
+            await updateEnergy()
+        }
+        // Don't hold the microphone while the app is in the background.
+        .onChange(of: scenePhase) { _, phase in
+            Task {
                 guard !isSample else { return }
-                await health.refresh()
-                calendar.loadTodayEvents()
-                calendar.loadWeekEvents()
-                await updateEnergy()
-            }
-            // Don't hold the microphone while the app is in the background.
-            .onChange(of: scenePhase) { _, phase in
-                Task {
-                    guard !isSample else { return }
-                    switch phase {
-                    case .active:
-                        now = .now
-                        dismissed = DismissedSuggestions.today()
-                        calendar.loadTodayEvents()
-                        calendar.loadWeekEvents()
-                        await pro.refresh()
-                        await health.refresh()          // your watch may have synced since
-                        await updateEnergy()
-                        await listen()
-                    case .background:
-                        chat.endGemini()
-                        await voice.stopLiveVoice()
-                    default: break
-                    }
+                switch phase {
+                case .active:
+                    now = .now
+                    dismissed = DismissedSuggestions.today()
+                    calendar.loadTodayEvents()
+                    calendar.loadWeekEvents()
+                    await pro.refresh()
+                    await health.refresh()          // your watch may have synced since
+                    await updateEnergy()
+                    await listen()
+                case .background:
+                    chat.endGemini()
+                    await voice.stopLiveVoice()
+                default: break
                 }
             }
-            // Read each new answer aloud, whichever screen you're on.
-            .onChange(of: chat.messages.count) { _, _ in
-                guard let last = chat.messages.last, !last.isUser, !last.byGemini else { return }
-                voice.speak(last.text)
-            }
+        }
+        // Read each new answer aloud, whichever screen you're on.
+        .onChange(of: chat.messages.count) { _, _ in
+            guard let last = chat.messages.last, !last.isUser, !last.byGemini else { return }
+            voice.speak(last.text)
         }
     }
 
     // MARK: - The five pages
-
-    /// The page you have swiped to. Tapping the bar sets it, which scrolls there.
-    private var swiped: Binding<TwinTab?> {
-        Binding(get: { tab }, set: { if let page = $0 { tab = page } })
-    }
 
     @ViewBuilder private func view(for page: TwinTab) -> some View {
         switch page {
@@ -1084,5 +1073,5 @@ struct ContentView: View {
 }
 
 #Preview {
-    ContentView()
+    NavigationStack { ContentView() }
 }

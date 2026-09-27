@@ -10,16 +10,21 @@ import SwiftUI
 
     var body: some Scene {
         WindowGroup {
-            if sample {
-                ContentView(isSample: true, leaveSample: { sample = false }).id("sample")
-            } else if onboarded {
-                ContentView(enterSample: { sample = true }).id("personal")
-                    .task {
-                        health.watchForNewData { await TwinRefresh.run() }
+            // One navigation container for the whole app. Swapping the sample and personal
+            // screens inside it, rather than each bringing its own, keeps their layout and
+            // their touch areas lined up.
+            NavigationStack {
+                if sample {
+                    ContentView(isSample: true, leaveSample: { sample = false }).id("sample")
+                } else if onboarded {
+                    ContentView(enterSample: { sample = true }).id("personal")
+                        .task {
+                            health.watchForNewData { await TwinRefresh.run() }
+                        }
+                } else {
+                    WelcomeView(profile: $profile, trySample: { sample = true }) {
+                        withAnimation(.easeInOut(duration: 0.4)) { onboarded = true }
                     }
-            } else {
-                WelcomeView(profile: $profile, trySample: { sample = true }) {
-                    withAnimation(.easeInOut(duration: 0.4)) { onboarded = true }
                 }
             }
         }
