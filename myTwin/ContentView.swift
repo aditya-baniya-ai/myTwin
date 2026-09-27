@@ -36,6 +36,7 @@ struct ContentView: View {
     @State private var planSpan: PlanSpan = .day
     @State private var pro = Subscription()
     @State private var showPaywall = false
+    @State private var askedLocked = false
     @State private var showCustomerCentre = false
     @State private var showShowcase = false
     @State private var showVoicePicker = false
@@ -425,36 +426,57 @@ struct ContentView: View {
         }
     }
 
-    /// The questions you keep asking, as one tap each. Hidden until there are a few, so it
-    /// isn't an empty card on your first day.
+    /// The questions you keep asking, as one tap each; three starters until you have
+    /// repeated a couple. Pro shows the latest answer under each and asks again on a tap.
+    /// Free shows the questions, and a tap explains they come with Pro.
     @ViewBuilder private var oftenAsked: some View {
+        let _ = chat.messages.count                        // re-read after each answer
         let asked = AskedQuestions.top()
-        if !asked.isEmpty {
-            DashboardSection(title: "You often ask") {
-                VStack(spacing: 0) {
-                    ForEach(asked) { item in
-                        Button {
-                            tab = .twin
-                            Task { await chat.send(item.question) }
-                        } label: {
-                            HStack(spacing: 10) {
-                                Image(systemName: "arrow.turn.down.right")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(BrandTitle.brand[1])
+        let items = asked.isEmpty
+            ? AskedQuestions.starters.map { AskedQuestions.Asked(question: $0, count: 0, last: .now) }
+            : asked
+        DashboardSection(title: asked.isEmpty ? "Try asking" : "You often ask") {
+            VStack(spacing: 0) {
+                ForEach(items) { item in
+                    Button {
+                        guard pro.isPro else { askedLocked = true; return }
+                        tab = .twin
+                        Task { await chat.send(item.question) }
+                    } label: {
+                        HStack(alignment: .firstTextBaseline, spacing: 10) {
+                            Image(systemName: "arrow.turn.down.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(BrandTitle.brand[1])
+                            VStack(alignment: .leading, spacing: 4) {
                                 Text(item.question)
                                     .font(.subheadline)
-                                    .multilineTextAlignment(.leading)
-                                Spacer(minLength: 0)
+                                if pro.isPro, let answer = item.answer {
+                                    Text(answer)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(3)
+                                }
                             }
-                            .padding(.vertical, 10)
-                            .contentShape(.rect)
+                            .multilineTextAlignment(.leading)
+                            Spacer(minLength: 0)
+                            if !pro.isPro {
+                                Image(systemName: "lock.fill").font(.caption).foregroundStyle(.secondary)
+                            }
                         }
-                        .buttonStyle(.plain)
-                        if item.id != asked.last?.id { Divider() }
+                        .padding(.vertical, 10)
+                        .contentShape(.rect)
                     }
+                    .buttonStyle(.plain)
+                    if item.id != items.last?.id { Divider() }
                 }
-                .dashboardCard()
             }
+            .dashboardCard()
+        }
+        .alert("Buy premium to use this feature.", isPresented: $askedLocked) {
+            Button("See myTwin Pro") { showPaywall = true }
+            Button("Not now", role: .cancel) {}
+        } message: {
+            Text("With Pro, Dash answers these for you and keeps the answers here.")
         }
     }
 

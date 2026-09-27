@@ -80,7 +80,12 @@ final class ChatManager {
                 : "Rescue my day is included with myTwin Pro. Upgrade to preview and confirm a rescue."))
             return
         }
-        if proEnabled, gemini.isActive, await answerWithGemini(text) { return }
+        if proEnabled, gemini.isActive, await answerWithGemini(text) {
+            if record, calendar.pendingChange == nil, let reply = messages.last, !reply.isUser {
+                AskedQuestions.remember(answer: reply.text, for: text)
+            }
+            return
+        }
         guard case .available = SystemLanguageModel.default.availability else {
             messages.append(ChatMessage(isUser: false, text: "On-device chat isn't available here. You can still check in on the Dash screen. Rescue my day is available with Pro."))
             return
@@ -89,6 +94,8 @@ final class ChatManager {
         let reply: String
         do {
             reply = try await session.respond(to: text).content
+            // Kept for the "You often ask" card. Errors below aren't answers.
+            if record, calendar.pendingChange == nil { AskedQuestions.remember(answer: reply, for: text) }
         } catch LanguageModelSession.GenerationError.guardrailViolation {
             // The safety filter occasionally blocks normal requests. The session keeps working afterwards.
             reply = "Sorry, I can't answer that one. Try asking another way."
