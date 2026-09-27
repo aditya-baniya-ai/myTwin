@@ -17,6 +17,7 @@
 		000000000000000000000309 /* AvatarImages.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000205 /* AvatarImages.xcassets */; };
 		000000000000000000000310 /* TwinState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000206 /* TwinState.swift */; };
 		000000000000000000000311 /* TwinState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000206 /* TwinState.swift */; };
+		8C232AFC3067F407002462F1 /* RevenueCatUI in Frameworks */ = {isa = PBXBuildFile; productRef = 000000000000000000000902 /* RevenueCatUI */; };
 		8C90D77330658E5500677FB6 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 000000000000000000000901 /* RevenueCat */; };
 /* End PBXBuildFile section */
 
@@ -27,6 +28,20 @@
 			proxyType = 1;
 			remoteGlobalIDString = 000000000000000200000000;
 			remoteInfo = myTwinWidgetExtension;
+		};
+		A40000000000000000000008 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 000000000000000000000000 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 000000000000000100000000;
+			remoteInfo = myTwin;
+		};
+		A50000000000000000000008 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 000000000000000000000000 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 000000000000000100000000;
+			remoteInfo = myTwin;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -55,6 +70,8 @@
 		000000000000000000000208 /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
 		000000000000000000000209 /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
 		00000000000000000000020A /* myTwin-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "myTwin-Info.plist"; sourceTree = "<group>"; };
+		A40000000000000000000003 /* myTwinTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = myTwinTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A50000000000000000000003 /* myTwinUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = myTwinUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -77,16 +94,37 @@
 			path = myTwin;
 			sourceTree = "<group>";
 		};
+		A40000000000000000000002 /* myTwinTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = myTwinTests;
+			sourceTree = "<group>";
+		};
+		A50000000000000000000002 /* myTwinUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = myTwinUITests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		000000000000000130000000 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
+				8C232AFC3067F407002462F1 /* RevenueCatUI in Frameworks */,
 				8C90D77330658E5500677FB6 /* RevenueCat in Frameworks */,
 			);
 		};
 		000000000000000230000000 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
+		A40000000000000000000005 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
+		A50000000000000000000005 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
 			);
@@ -97,6 +135,8 @@
 		000000000000000000000001 = {
 			isa = PBXGroup;
 			children = (
+				A50000000000000000000002 /* myTwinUITests */,
+				A40000000000000000000002 /* myTwinTests */,
 				000000000000000000000010 /* myTwin */,
 				000000000000000000000011 /* Shared */,
 				000000000000000000000012 /* myTwinWidget */,
@@ -139,6 +179,8 @@
 		000000000000000000000020 /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				A50000000000000000000003 /* myTwinUITests.xctest */,
+				A40000000000000000000003 /* myTwinTests.xctest */,
 				000000000000000000000120 /* myTwin.app */,
 				000000000000000000000130 /* myTwinWidgetExtension.appex */,
 			);
@@ -189,6 +231,48 @@
 			productReference = 000000000000000000000130 /* myTwinWidgetExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		A40000000000000000000001 /* myTwinTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A40000000000000000000009 /* Build configuration list for PBXNativeTarget "myTwinTests" */;
+			buildPhases = (
+				A40000000000000000000004 /* Sources */,
+				A40000000000000000000005 /* Frameworks */,
+				A40000000000000000000006 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A40000000000000000000007 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A40000000000000000000002 /* myTwinTests */,
+			);
+			name = myTwinTests;
+			productName = myTwinTests;
+			productReference = A40000000000000000000003 /* myTwinTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		A50000000000000000000001 /* myTwinUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A50000000000000000000009 /* Build configuration list for PBXNativeTarget "myTwinUITests" */;
+			buildPhases = (
+				A50000000000000000000004 /* Sources */,
+				A50000000000000000000005 /* Frameworks */,
+				A50000000000000000000006 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A50000000000000000000007 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A50000000000000000000002 /* myTwinUITests */,
+			);
+			name = myTwinUITests;
+			productName = myTwinUITests;
+			productReference = A50000000000000000000003 /* myTwinUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -224,6 +308,8 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+				A50000000000000000000001 /* myTwinUITests */,
+				A40000000000000000000001 /* myTwinTests */,
 				000000000000000100000000 /* myTwin */,
 				000000000000000200000000 /* myTwinWidgetExtension */,
 			);
@@ -245,6 +331,16 @@
 				000000000000000000000309 /* AvatarImages.xcassets in Resources */,
 			);
 		};
+		A40000000000000000000006 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
+		A50000000000000000000006 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -263,6 +359,16 @@
 				000000000000000000000305 /* MyTwinWidget.swift in Sources */,
 			);
 		};
+		A40000000000000000000004 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
+		A50000000000000000000004 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -270,6 +376,16 @@
 			isa = PBXTargetDependency;
 			target = 000000000000000200000000 /* myTwinWidgetExtension */;
 			targetProxy = 000000000000000310000000 /* PBXContainerItemProxy */;
+		};
+		A40000000000000000000007 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 000000000000000100000000 /* myTwin */;
+			targetProxy = A40000000000000000000008 /* PBXContainerItemProxy */;
+		};
+		A50000000000000000000007 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 000000000000000100000000 /* myTwin */;
+			targetProxy = A50000000000000000000008 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -564,6 +680,72 @@
 			};
 			name = Release;
 		};
+		A4000000000000000000000A /* Debug configuration for PBXNativeTarget "myTwinTests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.aadityabaniyapersonalteam.myTwinTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/myTwin.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/myTwin";
+			};
+			name = Debug;
+		};
+		A4000000000000000000000B /* Release configuration for PBXNativeTarget "myTwinTests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.aadityabaniyapersonalteam.myTwinTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/myTwin.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/myTwin";
+			};
+			name = Release;
+		};
+		A5000000000000000000000A /* Debug configuration for PBXNativeTarget "myTwinUITests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.aadityabaniyapersonalteam.myTwinUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = myTwin;
+			};
+			name = Debug;
+		};
+		A5000000000000000000000B /* Release configuration for PBXNativeTarget "myTwinUITests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.aadityabaniyapersonalteam.myTwinUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = myTwin;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -588,6 +770,22 @@
 			buildConfigurations = (
 				000000000000000211000000 /* Debug configuration for PBXNativeTarget "myTwinWidgetExtension" */,
 				000000000000000212000000 /* Release configuration for PBXNativeTarget "myTwinWidgetExtension" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		A40000000000000000000009 /* Build configuration list for PBXNativeTarget "myTwinTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A4000000000000000000000A /* Debug configuration for PBXNativeTarget "myTwinTests" */,
+				A4000000000000000000000B /* Release configuration for PBXNativeTarget "myTwinTests" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		A50000000000000000000009 /* Build configuration list for PBXNativeTarget "myTwinUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A5000000000000000000000A /* Debug configuration for PBXNativeTarget "myTwinUITests" */,
+				A5000000000000000000000B /* Release configuration for PBXNativeTarget "myTwinUITests" */,
 			);
 			defaultConfigurationName = Release;
 		};

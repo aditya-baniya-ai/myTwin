@@ -3,6 +3,22 @@ import EventKit
 import WidgetKit
 
 struct ContentView: View {
+    let isSample: Bool
+    let leaveSample: () -> Void
+    let enterSample: () -> Void
+    @State private var daily: DailySupport
+    @State private var showPreferences = false
+    @State private var showExplanation = false
+    @State private var showRescue = false
+    @State private var pendingRescue = false
+    @State private var rescueMinutes: Int?
+    @State private var sharedAction: PlannedAction?
+    @State private var undoAction: PlannedAction?
+    @State private var undoOriginal: PlannedAction?
+    @State private var planningProblem: String?
+    @State private var signalHistory: [DaySignals] = []
+    @State private var dashGesture: AvatarGesture?
+
     @Environment(\.scenePhase) private var scenePhase
     @State private var health: HealthManager
     @State private var calendar: CalendarManager
@@ -39,7 +55,12 @@ struct ContentView: View {
 
     private let energyModel = EnergyModel()
 
-    init() {
+    init(isSample: Bool = false, leaveSample: @escaping () -> Void = {}, enterSample: @escaping () -> Void = {}) {
+        self.isSample = isSample
+        self.leaveSample = leaveSample
+        self.enterSample = enterSample
+        _daily = State(initialValue: DailySupport(isSample: isSample))
+        _dismissed = State(initialValue: isSample ? [] : DismissedSuggestions.today())
         // The chat uses the same health and calendar data the home screen shows, and speaks
         // through the same voice that listens for "twin".
         let health = HealthManager()
@@ -75,12 +96,12 @@ struct ContentView: View {
                 Button("Dash's voice", systemImage: "waveform") {
                     showVoicePicker = true
                 }
-                Button("Ask myTwin", systemImage: "bubble.left.and.text.bubble.right") {
-                    showChat = true
+                if !isSample {
+                    Button("Ask myTwin", systemImage: "bubble.left.and.text.bubble.right") { showChat = true }
                 }
             }
             .sheet(isPresented: $loggingWeight) {
-                LogWeightSheet(last: weights.last?.pounds) { pounds in
+                LogWeightSheet(last: weights.last?.pounds, goal: daily.preferences.weightGoal) { pounds in
                     try await health.logWeight(pounds: pounds)
                     weights = await health.weights()
                 }
@@ -93,8 +114,9 @@ struct ContentView: View {
             }
             .safeAreaInset(edge: .bottom) { bottomBar }
             .task {
-                askGemini = gemini.needsAnswer      // once; the answer is remembered
+                if isSample { await updateEnergy(); return }
                 await pro.start()
+                askGemini = gemini.needsAnswer
                 await health.refreshAuthorizationState()
                 calendar.loadTodayEvents()
                 calendar.loadWeekEvents()
@@ -102,27 +124,63 @@ struct ContentView: View {
                 await listen()
             }
             .task { await followTheHours() }
-            .task { await pro.watchForChanges() }
+            .task { if !isSample { await pro.watchForChanges() } }
             // Both models read today's plan through this, and only the screen knows the
             // day's charge, bedtime and what has been dismissed.
             .onAppear {
+                chat.rescueDay = { minutes in rescueMinutes = minutes; openRescue() }
                 chat.planSource.summary = { [self] in
-                    TodayPlanText.summary(.init(dayStart: dayStart,
-                                                bedtime: bedtimeDate,
-                                                events: DayPlanner.items(from: calendar.events),
-                                                dismissed: dismissed,
-                                                trainedToday: trainedToday,
-                                                easyDay: energy?.band == .below))
+                    guard pro.isPro else { return "Adaptive plans and hour-by-hour forecasts require myTwin Pro. The first Rescue my day is free; the user can open it from Dash." }
+                    guard hasPrediction else { return "No measured forecast yet. The user can report how they feel and use Rescue my day to choose an activity." }
+                    return TodayPlanText.summary(.init(dayStart: dayStart, bedtime: bedtimeDate,
+                        events: currentEvents, dismissed: dismissed, trainedToday: trainedToday,
+                        easyDay: easyDay, preferences: effectivePreferences))
                 }
             }
             .onChange(of: pro.isPro, initial: true) { chat.proEnabled = pro.isPro }
+            .onChange(of: gemini.allowed) { if gemini.allowed != true { chat.endGemini() } }
             .sheet(isPresented: $showShowcase) { AvatarShowcase() }
             .sheet(isPresented: $showVoicePicker) {
                 VoicePicker(voice: voice, isPro: pro.isPro)
             }
-            .sheet(isPresented: $showPaywall) { ProPaywall(pro: pro) }
+            .sheet(isPresented: $showPaywall, onDismiss: {
+                if pendingRescue && pro.isPro { pendingRescue = false; showRescue = true }
+            }) { ProPaywall(pro: pro) }
+            .sheet(isPresented: $showPreferences) {
+                PlanningPreferencesView(preferences: daily.preferences) { value in
+                    daily.savePreferences(value)
+                    Task {
+                        if !isSample && (value.morningReminder || value.eventReminders || value.bedtimeReminder) {
+                            await notifications.requestPermission()
+                        }
+                        await reschedule()
+                    }
+                }
+            }
+            .sheet(isPresented: $showExplanation) {
+                EnergyExplanationView(history: signalHistory, reading: energy,
+                    checkIn: daily.currentCheckIn, isSample: isSample, report: recordCheckIn)
+            }
+            .sheet(isPresented: $showRescue) {
+                RescueDayView(daily: daily, calendar: calendar, events: { currentEvents },
+                              now: { planningNow }, allowed: canRescue, initialMinutes: rescueMinutes) { action, original in
+                    undoAction = action
+                    undoOriginal = original
+                    dashGesture = AvatarGesture.all.first { $0.clip == "wave" }
+                    Task { await reschedule() }
+                }
+            }
+            .sheet(item: $sharedAction) { DashShareView(action: $0, isSample: isSample) }
+            .onChange(of: calendar.revision) { Task { await reschedule() } }
+            .onReceive(NotificationCenter.default.publisher(for: .EKEventStoreChanged)) { _ in
+                guard !isSample else { return }
+                calendar.loadTodayEvents()
+                calendar.loadWeekEvents()
+                Task { await reschedule() }
+            }
             .sheet(isPresented: $showCustomerCentre) { ProCustomerCentre() }
             .refreshable {
+                guard !isSample else { return }
                 await health.refresh()
                 calendar.loadTodayEvents()
                 calendar.loadWeekEvents()
@@ -131,9 +189,14 @@ struct ContentView: View {
             // Don't hold the microphone while the app is in the background.
             .onChange(of: scenePhase) { _, phase in
                 Task {
+                    guard !isSample else { return }
                     switch phase {
                     case .active:
                         now = .now
+                        dismissed = DismissedSuggestions.today()
+                        calendar.loadTodayEvents()
+                        calendar.loadWeekEvents()
+                        await pro.refresh()
                         await health.refresh()          // your watch may have synced since
                         await updateEnergy()
                         await listen()
@@ -176,13 +239,18 @@ struct ContentView: View {
     private var twinPage: some View {
         ScrollView {
             VStack(spacing: 18) {
-                twinContent
-                    .containerRelativeFrame(.vertical)    // avatar fills the first screen
+                if isSample { sampleBanner }
+                twinContent.frame(height: 420)
+                supportCard
+                ActionFeedbackView(daily: daily, now: planningNow) { sharedAction = $0 }
 
-                if pro.isPro {
+                if fullAccess && hasPrediction {
                     tabLink("Predictions", tab: .predictions) {
-                        PredictionsCard(points: DayCharge.forecast(from: dayStart, until: bedtimeDate))
+                        PredictionsCard(points: DayCharge.forecast(from: dayStart, now: planningNow, until: bedtimeDate))
                     }
+                } else if fullAccess {
+                    Text("Still learning. You can check in and rescue your day while your sleep baseline builds.")
+                        .dashboardCard()
                 } else {
                     LockedCard(title: "Your energy, hour by hour",
                                detail: "See where your peak lands and when the dip hits, before the day starts.") {
@@ -190,17 +258,17 @@ struct ContentView: View {
                     }
                 }
 
-                if health.isAuthorized {
+                if health.isAuthorized && !isSample {
                     tabLink("Activity", tab: .activity) {
                         ActivityGrid(steps: health.snapshot.steps,
                                      activeEnergy: health.snapshot.activeEnergyKcal,
-                                     sleepWeek: sleepWeek, weights: weights) { loggingWeight = true }
+                                     sleepWeek: sleepWeek, weights: weights, preferences: daily.preferences) { loggingWeight = true }
                     }
                 }
 
                 suggestedChanges                          // the calendar, in brief
 
-                tabLink("Connections", tab: .you) { connections }
+                if !isSample { tabLink("Connections", tab: .you) { connections } }
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 20)
@@ -209,22 +277,19 @@ struct ContentView: View {
 
     /// Today's suggestions in brief, with a way through to the calendar itself.
     private var suggestedChanges: some View {
-        let today = DayPlanner.plan(events: DayPlanner.items(from: calendar.events), dayStart: dayStart,
-                                    now: .now, bedtime: bedtimeDate, excluding: dismissed,
-                                    trained: trainedToday, easyDay: energy?.band == .below)
-        let suggestions = pro.isPro ? today.filter { $0.kind == .suggestion } : []
+        let suggestions = fullAccess && hasPrediction ? plannedItems.filter { $0.kind == .suggestion } : []
         return VStack(alignment: .leading, spacing: 10) {
             Text("Suggested changes")
                 .font(.title3.weight(.bold))
                 .padding(.leading, 4)
-            if !pro.isPro {
+            if !fullAccess {
                 LockedCard(title: "Plans that fit your day",
                            detail: "A workout in your strongest free hour, a nap at the dip, the last coffee that still clears before bed.") {
                     showPaywall = true
                 }
             }
             VStack(spacing: 12) {
-                if !pro.isPro {
+                if !fullAccess {
                     EmptyView()
                 } else if suggestions.isEmpty {
                     Text("Nothing to change today.")
@@ -269,21 +334,22 @@ struct ContentView: View {
         VStack(spacing: 10) {
             BrandTitle()
                 .padding(.top, 20)
-            Avatar3DView(energy: charge * 100)
+            Avatar3DView(energy: charge * 100, gesture: dashGesture)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)     // whatever is left
                 .background { if listening { ListeningGlow() } }
                 .scaleEffect(listening ? 1.03 : 1)                    // he lifts while listening
                 .offset(y: listening ? -10 : 0)
                 .animation(.spring(response: 0.45, dampingFraction: 0.7), value: listening)
-                .onTapGesture(perform: talk)
-                .accessibilityLabel("Your twin, \(Int(charge * 100)) percent charged. Tap to talk.")
+                .onTapGesture { if isSample { openRescue() } else { talk() } }
+                .accessibilityLabel(hasPrediction ? "Your twin, illustrative energy estimate. Tap to talk." : "Your twin is still learning. Tap to talk.")
                 .accessibilityHint(voice.isDictating ? "Tap again when you're done" : "Tap to start listening")
             chargeLabel
             verdict
                 .padding(.horizontal, 20)
-            Text(DayGreeting.line(charge: charge, reading: energy, next: nextEvent,
-                                  dayStart: dayStart, healthConnected: health.isAuthorized,
-                                  userName: UserProfile().firstName))
+            Text(daily.currentCheckIn.map { "You said you feel \($0.title.lowercased()). Let's find what fits today." }
+                 ?? DayGreeting.line(charge: charge, reading: energy, next: nextEvent,
+                                  dayStart: dayStart, healthConnected: health.isAuthorized || isSample,
+                                  userName: isSample ? "Alex" : UserProfile().firstName))
                 .font(.subheadline.weight(.medium))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 24)
@@ -312,21 +378,23 @@ struct ContentView: View {
 
     private var predictionsPage: some View {
         page("Predictions", tab: .predictions) {
-            if pro.isPro {
-                PredictionsCard(points: DayCharge.forecast(from: dayStart, until: bedtimeDate))
+            if fullAccess && hasPrediction {
+                PredictionsCard(points: DayCharge.forecast(from: dayStart, now: planningNow, until: bedtimeDate))
+            } else if fullAccess {
+                Text("Still learning. Add at least seven recent nights of sleep in Apple Health; you can check in and rescue your day now.")
+                    .dashboardCard()
             } else {
                 LockedCard(title: "Your energy, hour by hour",
                            detail: "See where your peak lands and when the dip hits, before the day starts.") {
                     showPaywall = true
                 }
             }
-            if health.isAuthorized, todayFeatures != nil, !diary.ratedToday() {
-                ratingRow.dashboardCard()
-            }
+            Button("Why this plan?", systemImage: "info.circle") { showExplanation = true }
+            checkInCard
             if health.isAuthorized, !week.isEmpty {
                 DashboardSection(title: "Your last 7 days") { WeekStrip(days: week).dashboardCard() }
             }
-            oftenAsked
+            if !isSample { oftenAsked }
         }
     }
 
@@ -365,8 +433,12 @@ struct ContentView: View {
 
     private var activityPage: some View {
         page("Today's activity", tab: .activity) {
-            activity
-            if health.isAuthorized {
+            if isSample {
+                Text("Sample day uses fictional sleep and calendar data. Your real activity and health records are not shown here.").dashboardCard()
+            } else {
+                activity
+            }
+            if !isSample && health.isAuthorized {
                 ActivityDetail(snapshot: health.snapshot, workouts: workoutDetails)
             }
         }
@@ -380,7 +452,11 @@ struct ContentView: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            if planSpan == .day { plan } else { weekPlan }
+            if isSample { sampleBanner }
+            Button("Rescue my day", systemImage: "wand.and.stars") { openRescue() }.buttonStyle(.borderedProminent)
+            if planSpan == .day { plan } else if isSample {
+                Text("Sample mode shows one fictional day. Your real week is available after connecting Calendar.")
+            } else { weekPlan }
         }
     }
 
@@ -402,12 +478,20 @@ struct ContentView: View {
     /// What myTwin is connected to and what it can actually read.
     private var youPage: some View {
         page("You", tab: .you) {
-            voiceRow
-            proRow
+            if isSample { sampleBanner }
+            Button("Make it yours", systemImage: "slider.horizontal.3") { showPreferences = true }.dashboardCard()
+            if !isSample { Button("Try a sample day", systemImage: "play.rectangle", action: enterSample).dashboardCard() }
+            if !isSample {
+                voiceRow
+                proRow
 #if DEBUG
-            proResetRow
+                proResetRow
 #endif
-            connections
+            }
+            if !isSample { connections }
+            if notifications.permissionDenied && !isSample {
+                Text("Notifications are off in Settings. Your plan still works in the app.").font(.footnote)
+            }
             if health.isAuthorized {
                 DashboardSection(title: "What myTwin can read") {
                     CoverageSection(coverage: coverage, windowDays: 90).dashboardCard()
@@ -559,7 +643,8 @@ struct ContentView: View {
             source("Gemini", symbol: "sparkles", tint: BrandTitle.brand[1],
                    state: gemini.allowed == true ? (gemini.isOnline ? "On, and online" : "On, offline just now")
                                                  : "Off, answers stay on your iPhone",
-                   detail: "Smarter answers when you're online", action: nil)
+                   detail: "Change whether Google receives your questions and tool results") { askGemini = true }
+            Button("Change Gemini permission") { askGemini = true }.font(.subheadline)
         }
         .dashboardCard()
     }
@@ -598,7 +683,7 @@ struct ContentView: View {
     @ViewBuilder private var activity: some View {
         if health.isAuthorized {
             ActivityGrid(steps: health.snapshot.steps, activeEnergy: health.snapshot.activeEnergyKcal,
-                         sleepWeek: sleepWeek, weights: weights) { loggingWeight = true }
+                         sleepWeek: sleepWeek, weights: weights, preferences: daily.preferences) { loggingWeight = true }
         } else {
             VStack(alignment: .leading, spacing: 8) {
                 Button("Connect Apple Health") {
@@ -616,23 +701,19 @@ struct ContentView: View {
 
     /// The day's rows: your own events always, suggestions only with Pro.
     private var planItems: [PlanItem] {
-        let full = DayPlanner.plan(events: DayPlanner.items(from: calendar.events),
-                                   dayStart: dayStart, now: .now, bedtime: bedtimeDate,
-                                   excluding: dismissed, trained: trainedToday,
-                                   easyDay: energy?.band == .below)
-        return pro.isPro ? full : full.filter { $0.kind == .event }
+        fullAccess && hasPrediction ? plannedItems : currentEvents
     }
 
     /// Today's events with suggestions in the free time, or the button to connect the calendar.
     @ViewBuilder private var plan: some View {
-        if calendar.isAuthorized {
-            SmartCalendar(allDay: calendar.events.filter(\.isAllDay).map { $0.title ?? "Untitled" },
+        if calendar.isAuthorized || isSample {
+            SmartCalendar(allDay: isSample ? [] : calendar.events.filter(\.isAllDay).map { $0.title ?? "Untitled" },
                           items: planItems,
-                          now: .now,
-                          accept: { calendar.add(title: $0.title, start: $0.start, end: $0.end) },
+                          now: planningNow,
+                          accept: acceptSuggestion,
                           dismiss: { item in
-                              DismissedSuggestions.add(item.title)
-                              withAnimation { dismissed = DismissedSuggestions.today() }
+                              if isSample { dismissed.insert(item.title) }
+                              else { DismissedSuggestions.add(item.title); dismissed = DismissedSuggestions.today() }
                           })
             if let error = calendar.errorMessage {
                 Text(error).font(.footnote).foregroundStyle(.red)
@@ -654,9 +735,7 @@ struct ContentView: View {
 
     /// Your usual bedtime, tonight: where the forecast and the plan stop.
     private var bedtimeDate: Date {
-        let (hour, minute) = notifications.bedtime
-        let tonight = Calendar.current.date(bySettingHour: hour, minute: minute, second: 0, of: .now) ?? .now
-        return hour < 12 ? tonight.addingTimeInterval(86_400) : tonight    // after midnight: tomorrow
+        daily.preferences.bedtime(on: planningNow)
     }
 
     /// Where today's charge started, from the morning prediction. The widget reads the same
@@ -669,12 +748,12 @@ struct ContentView: View {
     }
 
     /// Right now, as a fraction: the prediction sets the start, the clock drains it.
-    private var charge: Double { DayCharge.remaining(from: dayStart, at: now) }
+    private var charge: Double { hasPrediction ? DayCharge.remaining(from: dayStart, at: planningNow) : 0.65 }
 
     private var mood: AvatarEnergyState { AvatarEnergyState(score: charge * 100) }
 
     private var chargeLabel: some View {
-        Text("\(Int(charge * 100))% charged")
+        Text(hasPrediction ? "\(Int(charge * 100))% · illustrative estimate" : "Still learning · check in below")
             .font(.caption.weight(.semibold))
             .foregroundStyle(.secondary)
             .contentTransition(.numericText())
@@ -744,6 +823,113 @@ struct ContentView: View {
         .animation(.snappy, value: chat.isResponding)
     }
 
+    private var planningNow: Date { isSample ? SampleDay.now : .now }
+    private var fullAccess: Bool { isSample || pro.isPro }
+    private var hasPrediction: Bool { energy != nil }
+    private var canRescue: Bool { fullAccess || !daily.usedFreeRescue }
+    private var easyDay: Bool { daily.currentCheckIn.map { $0 == .low } ?? (energy?.band == .below) }
+    private var effectivePreferences: PlanningPreferences {
+        var value = daily.preferences
+        value.movement = daily.suggestedMovement
+        return value
+    }
+    private var currentEvents: [PlanItem] {
+        if !isSample { return DayPlanner.items(from: calendar.events) }
+        let fixed = [PlanItem(kind: .event, title: "Project meeting", start: SampleDay.at(14, minute: 30), end: SampleDay.at(15), color: .blue, eventID: "sample-meeting"),
+                     PlanItem(kind: .event, title: "Class", start: SampleDay.at(16), end: SampleDay.at(17), color: .purple, eventID: "sample-class")]
+        return fixed + daily.actions.filter { !$0.skipped }.map {
+            PlanItem(kind: .event, title: $0.title, start: $0.start, end: $0.end, color: .green,
+                     movement: $0.movement, eventID: $0.eventID ?? $0.id.uuidString)
+        }
+    }
+    private var plannedItems: [PlanItem] {
+        DayPlanner.plan(events: currentEvents, dayStart: dayStart, now: planningNow, bedtime: bedtimeDate,
+                        excluding: dismissed, trained: trainedToday, easyDay: easyDay, preferences: effectivePreferences)
+    }
+    private var sampleBanner: some View {
+        HStack {
+            Label("Sample day · fictional data · 2 PM", systemImage: "play.rectangle.fill").font(.caption.bold())
+            Spacer()
+            Button("Exit", action: leaveSample)
+        }.padding(12).background(.orange.opacity(0.15), in: .rect(cornerRadius: 12))
+    }
+    private var checkInCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("How do you feel right now?").font(.headline)
+            HStack {
+                ForEach(ReportedEnergy.allCases) { value in
+                    Button(value.title) { recordCheckIn(value) }
+                        .buttonStyle(.bordered)
+                        .tint(daily.currentCheckIn == value ? .green : .accentColor)
+                        .accessibilityAddTraits(daily.currentCheckIn == value ? [.isSelected] : [])
+                }
+            }
+            Text("Self-reported · works without a watch").font(.caption).foregroundStyle(.secondary)
+        }.dashboardCard()
+    }
+    private var supportCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            checkInCard
+            Button { openRescue() } label: {
+                Label("Rescue my day", systemImage: "wand.and.stars").font(.headline).frame(maxWidth: .infinity)
+            }.buttonStyle(.borderedProminent).controlSize(.large)
+            Text(canRescue ? "A plan that fits how you feel. Preview every change." : "Your first rescue is done. Keep adapting with Pro.")
+                .font(.caption).foregroundStyle(.secondary)
+            HStack {
+                Button("Why this plan?") { showExplanation = true }
+                Spacer()
+                Button("Make it yours") { showPreferences = true }
+            }.font(.subheadline)
+            if let action = undoAction {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label(isSample ? "Sample plan updated" : "Calendar updated", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                    Text("\(action.title) · \(timeRangeText(action.start, action.end))").font(.subheadline)
+                    HStack {
+                        Button("Undo change") { undoRescue(action) }
+                        Spacer()
+                        Button("Share my plan") { sharedAction = action }
+                    }
+                }.dashboardCard()
+            }
+            if let planningProblem { Text(planningProblem).foregroundStyle(.red).font(.footnote) }
+        }
+    }
+    private func openRescue() {
+        if canRescue { showRescue = true }
+        else { pendingRescue = true; showPaywall = true }
+    }
+    private func recordCheckIn(_ value: ReportedEnergy) {
+        daily.report(value, now: planningNow)
+        if !isSample, let todayFeatures { diary.record(rating: value.rating, features: todayFeatures) }
+        // A check-in changes recommendations, not the measured sleep or plotted battery.
+    }
+    private func acceptSuggestion(_ item: PlanItem) {
+        guard fullAccess else { showPaywall = true; return }
+        let action = PlannedAction(movement: item.movement ?? .rest, title: item.title,
+                                   start: item.start, end: item.end, reportedEnergy: daily.currentCheckIn,
+                                   tracksOutcome: item.movement != nil)
+        do {
+            let saved = isSample ? action : try calendar.saveActivity(action, replacing: nil, bedtime: bedtimeDate)
+            daily.save(saved)
+            planningProblem = nil
+        } catch { planningProblem = error.localizedDescription }
+    }
+    private func undoRescue(_ action: PlannedAction) {
+        do {
+            if !isSample { try calendar.undoActivity(action, restoring: undoOriginal) }
+            daily.undo(action, restoring: undoOriginal)
+            undoAction = nil
+            undoOriginal = nil
+            planningProblem = nil
+        } catch { planningProblem = error.localizedDescription }
+    }
+    private func reschedule() async {
+        guard !isSample else { return }
+        await TwinRefresh.schedule(reading: energy, dayStart: dayStart,
+            bedtime: (daily.preferences.bedtimeHour, daily.preferences.bedtimeMinute),
+            calendar: calendar, trained: trainedToday, through: notifications)
+    }
+
     // MARK: - Actions
 
     private func record(rating: Double) {
@@ -762,6 +948,7 @@ struct ContentView: View {
 
     /// Listens for "twin" from the moment the app opens. Answers appear under Dash.
     private func listen() async {
+        guard !isSample else { return }
         await voice.startLiveVoice { sentence in
             guard !chat.isResponding else { return }
             Task { await chat.send(sentence) }
@@ -769,9 +956,11 @@ struct ContentView: View {
     }
 
     private func updateEnergy() async {
-        defer { shareMood() }           // even without Health data: then it is an average day
-        guard health.isAuthorized, let energyModel else { return }
-        let (history, searched) = await health.history()
+        defer { if !isSample { shareMood() } }
+        guard let energyModel else { return }
+        if !isSample && !health.isAuthorized { energy = nil; signalHistory = []; await reschedule(); return }
+        let (history, searched) = isSample ? (SampleDay.history, 14) : await health.history()
+        signalHistory = history
         searchedDays = searched
         nightsFound = energyModel.usableNights(in: history).count
         todayFeatures = energyModel.features(from: history)
@@ -780,24 +969,23 @@ struct ContentView: View {
         week = (0..<7).compactMap { offset in
             let slice = Array(history.dropFirst(offset))
             guard let day = slice.first else { return nil }
-            return (day.date, energyModel.reading(from: slice, diary: diary)?.band)
+            return (day.date, energyModel.reading(from: slice)?.band)
         }
         withAnimation(.easeOut(duration: 0.4)) {
-            energy = energyModel.reading(from: history, diary: diary)
+            energy = energyModel.reading(from: history, diary: isSample ? nil : diary)
         }
+        if isSample { return }
         coverage = await health.coverage(days: 90)
         weights = await health.weights()
         trainedToday = await !health.workoutsToday().isEmpty
         workoutDetails = await health.workoutDetails()
-        await TwinRefresh.schedule(reading: energy, dayStart: dayStart,
-                                   bedtime: health.typicalBedtime(from: history),
-                                   calendar: calendar, trained: trainedToday, through: notifications)
+        await reschedule()
     }
 
     /// Hands today's starting charge to the widget and puts the matching face on the app
     /// icon, so the app, the widget and the icon all show the same twin.
     private func shareMood() {
-        TwinRefresh.share(dayStart: dayStart)
+        TwinRefresh.share(dayStart: dayStart, hasPrediction: energy != nil)
     }
 
     /// Wakes at the top of each hour, when the charge changes.

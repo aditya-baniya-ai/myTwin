@@ -69,32 +69,65 @@ him — both the tap and the wake word trigger the same animation so there's alw
 feedback. Answers are spoken back through the voice you choose on the You tab.
 
 **Predicts** whether today is better or worse than *your* normal — not an absolute score.
-The model is your own 14-day running average plus a small ridge regression on three sleep
-features. It needs about two weeks of your data before it says anything at all.
+The model uses five HealthKit-compatible sleep and resting-heart-rate features relative
+to your recent baseline. A prediction requires today’s sleep plus seven usable nights
+within the preceding 14 calendar days. Manual check-ins work immediately.
 
 **Plans** around what it finds: it walks the gaps between your real events in 15-minute
 steps and suggests what fits, avoiding what you've already dismissed three times.
 
 **Talks**, by tapping the avatar. Speech is transcribed on device with `SpeechAnalyzer`.
 Answers come from Gemini when you're online and you've allowed it, and from Apple's
-on-device Foundation Models when you're not.
+on-device Foundation Models when available. Gemini requires Pro and explicit consent.
 
 **Keeps working while closed.** A HealthKit observer wakes the app in the background,
 recomputes, updates the Home Screen widget, and schedules the day's notifications: a
 morning briefing, a heads-up ten minutes before each event, and a bedtime nudge.
+
+## New daily-support flows
+
+- **Rescue my day:** choose an activity and time, preview the before/after change,
+  confirm it, and undo from the dashboard. Only app-created, unchanged, writable,
+  nonrecurring activities can be replaced; fixed events remain busy. One rescue is
+  free, with further rescues in Pro.
+- **Sample day and preferences:** try fictional data without granting health/calendar
+  access. Choose activity, equipment, duration, bedtime, optional goals, and reminders.
+- **Why this plan:** inspect measured sleep, recent baseline, missing data, and the
+  distinction between estimates and self-reported energy.
+- **Activity outcomes:** record Better / Same / Worse or skip. Repeated feedback can
+  suggest another activity; small-sample associations are labelled as such.
+- **Share with Dash:** preview a rendered card and use the native share sheet. Personal
+  event titles and times are hidden by default; sample cards are marked SAMPLE DAY.
+
+Choose **Try a sample day** on onboarding or the You tab. The launch argument
+`--sample-day` also opens it for a demo or UI test.
+
+## Tests
+
+The shared `myTwin` scheme includes app unit tests and sample-day UI tests:
+
+```sh
+xcodebuild -project myTwin.xcodeproj -scheme myTwin \
+  -destination 'platform=iOS Simulator,name=myTwin Review' test
+```
+
+Use an installed simulator name. See `docs/verification.md` for results and remaining
+physical-device/store checks. A successful unsigned build is not an App Store release.
 
 ## Honest limits
 
 The model predicts **direction, not a number**. Measured with leave-one-person-out
 evaluation on [PMData](https://datasets.simula.no/pmdata/) (16 people, 1,747 labelled days):
 
-| Target | Within-person correlation | People improved | Wilcoxon p |
+| Target | Mean within-person correlation | People improved | Wilcoxon p |
 |---|---|---|---|
-| Fatigue (1–5) | −0.054 → **+0.128** | 12/16 | 0.008 |
-| Readiness (0–10) | +0.051 → **+0.188** | 14/16 | 0.001 |
+| Fatigue | -0.054 → +0.103 | 12/16 | 0.0034 |
+| Readiness | +0.051 → +0.124 | 14/16 | 0.0021 |
 
-Absolute error barely moves (readiness MAE 1.152 → 1.151), which is exactly why the app
-talks about "better or worse than your normal" and never shows a score out of ten.
+These are results from the current five-feature research pipeline, not the earlier
+Fitbit sleep-score experiment. Readiness MAE is 1.152 for the baseline and 1.155
+for the model: absolute accuracy does not improve. The displayed percentage and
+hourly curve are **illustrations**, not measurements of a body battery.
 
 A second dataset, LifeSnaps (71 people), gave no usable signal at all — within a person,
 tiredness tracked the hour of the day and nothing else. That negative result, and why

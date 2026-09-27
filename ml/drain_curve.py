@@ -6,7 +6,11 @@ the hour. That gives a real drain curve to shape the avatar with.
 import json, pathlib
 import numpy as np, pandas as pd
 
-SRC = "/private/tmp/claude-501/-Users-aadityabaniya-Documents-myTwin/face489d-9eff-4a04-87ec-a92333097c00/scratchpad/ml/data/lifesnaps/rais_anonymized/csv_rais_anonymized/hourly_fitbit_sema_df_unprocessed.csv"
+import argparse
+parser = argparse.ArgumentParser(description="Rebuild the illustrative hourly curve from a local LifeSnaps CSV.")
+parser.add_argument("source", type=pathlib.Path, help="hourly_fitbit_sema_df_unprocessed.csv")
+SRC = parser.parse_args().source
+
 MOOD = ['ALERT','HAPPY','NEUTRAL','RESTED/RELAXED','SAD','TENSE/ANXIOUS','TIRED']
 
 h = pd.read_csv(SRC, low_memory=False)
@@ -37,7 +41,7 @@ for hour in range(6, 10):
 print("\nhourly charge multiplier (1.0 = freshest):")
 print(" ".join(f"{hour:02d}:{value:.2f}" for hour, value in charge.items()))
 
-path = pathlib.Path("model/energy_model.json")
+path = pathlib.Path(__file__).resolve().parent / "model/energy_model.json"
 model = json.loads(path.read_text())
 model["hourly_charge"] = [float(charge[hour]) for hour in range(24)]
 model["hourly_charge_source"] = f"LifeSnaps, {int(by_hour.n.sum())} check-ins across {len(by_hour)} hours"

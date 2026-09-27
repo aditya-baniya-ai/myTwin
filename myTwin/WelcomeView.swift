@@ -4,6 +4,7 @@ import SwiftUI
 /// Once filled in, it's never shown again — the profile is saved to UserDefaults.
 struct WelcomeView: View {
     @Binding var profile: UserProfile
+    var trySample: () -> Void = {}
     var onComplete: () -> Void
 
     @State private var nameText = ""
@@ -92,6 +93,8 @@ struct WelcomeView: View {
 
                 Spacer()
 
+                Button("Try a sample day — no watch needed", systemImage: "play.rectangle", action: trySample)
+                    .font(.subheadline).padding(.bottom, 16)
                 // Continue button
                 Button(action: save) {
                     Text("Continue")
@@ -113,7 +116,7 @@ struct WelcomeView: View {
                 .animation(.easeOut(duration: 0.25), value: isValid)
             }
         }
-        .onAppear { focusedField = .name }
+        .preferredColorScheme(.dark)
     }
 
     private func save() {

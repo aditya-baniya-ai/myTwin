@@ -20,7 +20,8 @@ struct MyTwinWidget: Widget {
 
 struct Entry: TimelineEntry {
     let date: Date
-    let energy: Double          // 0-100
+    let energy: Double          // illustrative, 0-100
+    var hasPrediction = false
 }
 
 struct Provider: TimelineProvider {
@@ -45,7 +46,7 @@ struct Provider: TimelineProvider {
     }
 
     private func entry(at date: Date) -> Entry {
-        Entry(date: date, energy: TwinState.energy(at: date))
+        Entry(date: date, energy: TwinState.energy(at: date), hasPrediction: TwinState.hasPrediction(on: date))
     }
 }
 
@@ -62,9 +63,9 @@ struct WidgetView: View {
             HStack(spacing: 12) {
                 twin.frame(width: 120)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(percent)
+                    Text(entry.hasPrediction ? percent : "—")
                         .font(.system(size: 40, weight: .bold, design: .rounded))
-                    Text("charged")
+                    Text(entry.hasPrediction ? "estimated" : "Still learning")
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(.secondary)
                     Text(advice)
@@ -77,7 +78,7 @@ struct WidgetView: View {
         default:
             VStack(spacing: 0) {
                 twin
-                Text("\(percent) charged")
+                Text(entry.hasPrediction ? "\(percent) estimated" : "Check in with Dash")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
             }
@@ -94,7 +95,8 @@ struct WidgetView: View {
     }
 
     private var advice: String {
-        switch mood {
+        guard entry.hasPrediction else { return "Open myTwin to tell Dash how you feel." }
+        return switch mood {
         case .energetic: "Good window for the hard thing."
         case .normal: "Steady. Keep the big tasks moving."
         case .tired: "Past your peak. Save the easy jobs for later."

@@ -13,6 +13,8 @@ struct PlanItem: Identifiable {
     var note: String?
     var color: Color = .accentColor      // the calendar's colour, or the energy colour
     var symbol: String = "sparkles"
+    var movement: Movement? = nil
+    var eventID: String? = nil
 
     /// The same row keeps the same identity when the plan is rebuilt, so a half-finished
     /// swipe isn't lost.
@@ -58,20 +60,19 @@ enum DismissedSuggestions {
 /// Fills free time with suggestions that suit your predicted energy: a workout in the
 /// strongest free hour, and a low-effort task once your energy drops in the evening.
 enum DayPlanner {
-    /// Your 4-day split, one day after the next. Edit to match yours.
-    static let workoutSplit = ["Shoulders & Back", "Chest & Triceps", "Legs", "Arms & Core"]
-    static let easyTask = "Meal prep: chicken & rice"
+    // Activity choice and duration come from PlanningPreferences.
+    static let easyTask = "Prepare for tomorrow"
     static let napTitle = "Nap"
     static let coffeeTitle = "Last coffee"
     /// Whole words that mean a workout is already booked, so none is suggested.
-    private static let workoutWords: Set<String> = ["gym", "workout", "run", "training", "lift", "yoga", "swim"]
+    private static let workoutWords: Set<String> = ["gym", "workout", "run", "training", "lift", "yoga", "swim", "pilates", "walk", "stretch", "strength", "recovery"]
 
     /// Today's timed events as plan rows. All-day events are shown separately.
     static func items(from events: [EKEvent]) -> [PlanItem] {
         events.filter { !$0.isAllDay }.map { event in
             PlanItem(kind: .event, title: event.title ?? "Untitled", start: event.startDate,
                      end: event.endDate,
-                     color: event.calendar.map { Color(cgColor: $0.cgColor) } ?? .accentColor)
+                     color: event.calendar.map { Color(cgColor: $0.cgColor) } ?? .accentColor, eventID: event.eventIdentifier)
         }
     }
 
@@ -85,7 +86,8 @@ enum DayPlanner {
     /// session.
     static func plan(events: [PlanItem], dayStart: Double, now: Date, bedtime: Date,
                      workout: String? = nil, excluding dismissed: Set<String> = [],
-                     trained: Bool = false, easyDay: Bool = false) -> [PlanItem] {
+                     trained: Bool = false, easyDay: Bool = false,
+                     preferences: PlanningPreferences = .load()) -> [PlanItem] {
         func energy(_ date: Date) -> Double { DayCharge.remaining(from: dayStart, at: date) }
         let calendar = Calendar.current
         let gaps = freeBlocks(around: events, from: now, to: bedtime)
@@ -96,9 +98,9 @@ enum DayPlanner {
         let skip = dismissed.union(events.map(\.title))
 
         // A workout in the free hour with the most energy, if it's a strong one.
-        let day = (calendar.ordinality(of: .day, in: .era, for: now) ?? 0) % workoutSplit.count
-        let workoutTitle = easyDay ? easyMove : "\(workout ?? workoutSplit[day]) workout"
-        let length = easyDay ? 30 : 60
+        let movement: Movement = easyDay && preferences.movement == .strength ? .stretch : preferences.movement
+        let workoutTitle = workout ?? (movement == preferences.movement ? preferences.activityTitle : movement.title)
+        let length = easyDay ? min(preferences.minutes, 20) : preferences.minutes
         // A workout already recorded in Health beats anything the calendar says.
         if !alreadyTraining, !trained, !skip.contains(workoutTitle),
            let gap = gaps.filter({ $0.duration >= Double(length) * 60 && calendar.component(.hour, from: $0.start) < 20 })
@@ -108,22 +110,17 @@ enum DayPlanner {
                                           note: easyDay
                                             ? "Today came in under your normal, so something gentle at \(percent(energy(gap.start)))."
                                             : "Forecast \(percent(energy(gap.start))): one of your strongest hours left today.",
-                                          charge: energy(gap.start)))
+                                          charge: energy(gap.start), movement: movement))
         }
 
         // A low-effort task in the first free stretch of the evening where energy has
         // dropped: the evening part of any free block, after anything already placed there.
-        let taken = suggestions.map { DateInterval(start: $0.start, end: $0.end) }
         let evening = calendar.date(bySettingHour: 17, minute: 0, second: 0, of: now) ?? now
-        let slots = gaps.compactMap { gap -> DateInterval? in
-            var start = max(gap.start, evening)
-            for block in taken where block.start <= start && block.end > start { start = block.end }
-            return start < gap.end ? DateInterval(start: start, end: gap.end) : nil
-        }
         if !skip.contains(easyTask),
-           let slot = slots.first(where: { $0.duration >= 45 * 60 && energy($0.start) <= 0.7 * dayStart }) {
+           let slot = free(gaps, after: suggestions, minutes: 45,
+                           where: { $0 >= evening && energy($0) <= 0.7 * dayStart }) {
             suggestions.append(suggestion(easyTask, in: slot, minutes: 45,
-                                          note: "Energy drops to \(percent(energy(slot.start))): an easy task fits.",
+                                          note: "An optional easy task for a quieter part of the day.",
                                           charge: energy(slot.start)))
         }
         // A nap when energy bottoms out, if you're free and it's early enough not to
@@ -175,11 +172,14 @@ enum DayPlanner {
 
     /// The gaps between events, from now until bedtime.
     private static func freeBlocks(around events: [PlanItem], from now: Date, to bedtime: Date) -> [DateInterval] {
+        guard bedtime > now else { return [] }
         var gaps: [DateInterval] = []
         var cursor = now
         for event in events.sorted(by: { $0.start < $1.start }) where event.end > cursor {
-            if event.start > cursor { gaps.append(DateInterval(start: cursor, end: event.start)) }
-            cursor = max(cursor, event.end)
+            let end = min(event.start, bedtime)
+            if end > cursor { gaps.append(DateInterval(start: cursor, end: end)) }
+            cursor = min(bedtime, max(cursor, event.end))
+            if cursor >= bedtime { break }
         }
         if bedtime > cursor { gaps.append(DateInterval(start: cursor, end: bedtime)) }
         return gaps
@@ -188,12 +188,12 @@ enum DayPlanner {
     /// Starts on the next half hour when it still fits, so blocks read like real plans.
     private static func suggestion(_ title: String, in gap: DateInterval, minutes: Int,
                                    note: String, charge: Double,
-                                   symbol: String = "sparkles") -> PlanItem {
+                                   symbol: String = "sparkles", movement: Movement? = nil) -> PlanItem {
         let length = TimeInterval(minutes * 60)
         let tidy = roundedUp(gap.start)
         let start = tidy.addingTimeInterval(length) <= gap.end ? tidy : gap.start
         return PlanItem(kind: .suggestion, title: title, start: start, end: start.addingTimeInterval(length),
-                        note: note, color: AvatarEnergyState(score: charge * 100).glow[0], symbol: symbol)
+                        note: note, color: AvatarEnergyState(score: charge * 100).glow[0], symbol: symbol, movement: movement)
     }
 
     /// The next :00 or :30 at or after `date`.

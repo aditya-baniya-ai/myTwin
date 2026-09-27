@@ -10,7 +10,7 @@ from scipy.stats import spearmanr
 import lightgbm as lgb
 warnings.filterwarnings("ignore")
 
-ROOT = pathlib.Path("data/pmdata_hf")
+ROOT = pathlib.Path(__file__).resolve().parent / "data/pmdata_hf"
 
 def load_json(p):
     return json.loads(p.read_text()) if p.exists() else []
@@ -81,6 +81,8 @@ def person_frame(d):
     return out
 
 frames = [person_frame(d) for d in sorted(ROOT.glob("p*")) if (d / "pmsys" / "wellness.csv").exists()]
+if not frames:
+    raise SystemExit("No PMData files. Run download_pmdata.py first.")
 df = pd.concat(frames, ignore_index=True)
 df["date"] = pd.to_datetime(df.date)
 df = df.sort_values(["person","date"]).reset_index(drop=True)
@@ -142,6 +144,8 @@ LEAN = [c for c in ["asleep","efficiency","deep","rem","overall_score","revitali
         "dow","asleep_z","overall_score_z","resting_heart_rate_z","steps_yday_z"] if c in feats]
 
 if __name__ == "__main__":
+    df.to_csv(ROOT.parent / "pmdata_features.csv", index=False)
+    print("Exported data/pmdata_features.csv")
     for t in ["readiness", "fatigue"]:
         evaluate(t, label=" [all features]")
         evaluate(t, LEAN, label=" [lean]")

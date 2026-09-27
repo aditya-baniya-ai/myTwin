@@ -58,8 +58,8 @@ struct PaywallView: View {
                             "A workout in your strongest free hour, a nap at the dip, the last coffee that still clears before bed.")
                     benefit("waveform", "Dash talks back",
                             "A natural voice and smarter answers about your sleep, energy and plans.")
-                    benefit("sun.horizon.fill", "A morning worth reading",
-                            "What today looks like and the one thing worth doing, before you start it.")
+                    benefit("arrow.triangle.2.circlepath", "Rescue a busy day",
+                            "Adapt a flexible activity to your time and preferences, with confirmation and undo.")
                 }
                 .padding(16)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -69,6 +69,7 @@ struct PaywallView: View {
                     Text("Plans are loading. If this sticks, check your connection.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+                    Button("Retry loading plans") { Task { await pro.loadOfferings() } }
                 } else {
                     VStack(spacing: 10) {
                         ForEach(pro.packages, id: \.identifier) { package in

@@ -14,6 +14,7 @@ enum TodayPlanText {
         let dismissed: Set<String>
         let trainedToday: Bool
         let easyDay: Bool
+        var preferences: PlanningPreferences = .load()
     }
 
     static func summary(_ inputs: Inputs, now: Date = .now) -> String {
@@ -36,7 +37,7 @@ enum TodayPlanText {
 
         let plan = DayPlanner.plan(events: inputs.events, dayStart: inputs.dayStart, now: now,
                                    bedtime: inputs.bedtime, excluding: inputs.dismissed,
-                                   trained: inputs.trainedToday, easyDay: inputs.easyDay)
+                                   trained: inputs.trainedToday, easyDay: inputs.easyDay, preferences: inputs.preferences)
         let suggestions = plan.filter { $0.kind == .suggestion }
         if suggestions.isEmpty {
             lines.append("No suggestions for the rest of today.")

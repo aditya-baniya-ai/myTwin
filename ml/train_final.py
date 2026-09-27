@@ -1,32 +1,29 @@
-"""Train the model the app ships, and export it as plain numbers.
+"""Fit/evaluate the five-feature research model; export coefficients and imputation.
 
-The model is deliberately tiny: each person's own running average, plus a ridge
-regression on three sleep features that nudges it up or down. A linear model needs
-no Core ML runtime - the app can compute `intercept + sum(weight * feature)` directly.
-
-Run:  python train_final.py
-Reads data/pmdata_features.csv, writes model/energy_model.json
+Run from any directory: python3 ml/train_final.py
+Requires ml/data/pmdata_features.csv. Evaluation fits imputation on training people only.
+The hourly illustration is preserved separately from the learned sleep model.
 """
 import json
-import pathlib
-import warnings
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from scipy.stats import spearmanr
+from scipy.stats import spearmanr, wilcoxon
 from sklearn.linear_model import RidgeCV
 
-warnings.filterwarnings("ignore")
-
-# Only signals every watch can deliver through HealthKit: Fitbit's sleep score is
-# proprietary, so Apple Watch and Garmin users could never supply it.
 FEATURES = ["asleep_z", "efficiency", "deep_z", "rem_z", "resting_heart_rate_z"]
 TARGETS = ["fatigue", "readiness"]
-MIN_HISTORY = 7          # days of your own reports before the app says anything
-BASELINE_WINDOW = 14     # days used for the rolling "your normal"
+MIN_HISTORY = 7
+BASELINE_WINDOW = 14
+HERE = Path(__file__).resolve().parent
 
-here = pathlib.Path(__file__).parent
-df = pd.read_csv(here / "data" / "pmdata_features.csv")
+
+def load_data():
+    path = HERE / "data/pmdata_features.csv"
+    if not path.exists():
+        raise SystemExit("Missing ml/data/pmdata_features.csv. Download PMData and run train_pmdata.py first (see ml/README.md).")
+    return pd.read_csv(path).sort_values(["person", "date"])
 
 
 def running_mean(frame, target):
@@ -34,78 +31,78 @@ def running_mean(frame, target):
         lambda s: s.shift(1).expanding(min_periods=MIN_HISTORY).mean())
 
 
-def leave_one_person_out(frame, target):
-    """The honest check: never score a person using their own data in training."""
-    y = frame[target].values
-    people = frame.person.values
-    base = frame["run_mean"].values
+def evaluate(frame, target):
+    y, people, base = frame[target].values, frame.person.values, frame.run_mean.values
     X = frame[FEATURES].apply(pd.to_numeric, errors="coerce")
     pred = np.full(len(frame), np.nan)
-
     for person in np.unique(people):
-        test, train = people == person, people != person
-        deviation = y[train] - base[train]
-        usable = ~np.isnan(deviation)
-        model = build_model()
-        model.fit(fill(X[train][usable]), deviation[usable])
-        pred[test] = base[test] + model.predict(fill(X[test]))
-
-    gains = []
+        test = people == person
+        train = ~test & np.isfinite(y - base)
+        medians = X.loc[train].median().fillna(0)
+        model = RidgeCV(alphas=[1, 10, 100, 1000]).fit(X.loc[train].fillna(medians), (y-base)[train])
+        pred[test] = base[test] + model.predict(X.loc[test].fillna(medians))
+    rows = []
     for person in np.unique(people):
-        m = (people == person) & ~np.isnan(pred) & ~np.isnan(base)
-        if m.sum() < 20 or np.std(y[m]) == 0:
+        mask = (people == person) & np.isfinite(pred) & np.isfinite(base) & np.isfinite(y)
+        if mask.sum() < 20 or min(np.std(y[mask]), np.std(base[mask]), np.std(pred[mask])) < 1e-9:
             continue
-        if np.std(base[m]) > 1e-9 and np.std(pred[m]) > 1e-9:
-            gains.append(spearmanr(y[m], pred[m]).statistic - spearmanr(y[m], base[m]).statistic)
-    return np.array(gains)
+        rows.append(dict(person=person, days=int(mask.sum()),
+                         baseline=float(spearmanr(y[mask], base[mask]).statistic),
+                         model=float(spearmanr(y[mask], pred[mask]).statistic),
+                         mae_base=float(np.abs(y[mask]-base[mask]).mean()),
+                         mae_model=float(np.abs(y[mask]-pred[mask]).mean())))
+    return pd.DataFrame(rows)
 
 
-def fill(frame):
-    return frame.fillna(frame.median(numeric_only=True)).fillna(0)
+def summary(rows):
+    gains = (rows.model - rows.baseline).to_numpy()
+    rng = np.random.default_rng(0)
+    boot = rng.choice(gains, (5000, len(gains)), replace=True).mean(axis=1)
+    return dict(people_helped=f"{int((gains > 0).sum())}/{len(gains)}",
+                mean_correlation_gain=float(gains.mean()),
+                baseline_correlation=float(rows.baseline.mean()), model_correlation=float(rows.model.mean()),
+                gain_ci95=np.percentile(boot, [2.5, 97.5]).tolist(),
+                wilcoxon_p=float(wilcoxon(gains).pvalue),
+                mae_baseline=float(rows.mae_base.mean()), mae_model=float(rows.mae_model.mean()))
 
 
-def build_model():
-    return RidgeCV(alphas=[1, 10, 100, 1000])
+def main():
+    df = load_data()
+    export = {"baseline_window_days": BASELINE_WINDOW, "min_history_days": MIN_HISTORY, "targets": {}}
+    # This curve is an illustration derived in a separate historical experiment.
+    shipped = json.loads((HERE.parent / "Shared/energy_model.json").read_text())
+    for key in ("hourly_charge", "hourly_charge_source"):
+        if key in shipped:
+            export[key] = shipped[key]
+    metrics = {}
+    for target in TARGETS:
+        frame = df[df[target].notna()].copy()
+        frame["run_mean"] = running_mean(frame, target)
+        result = summary(evaluate(frame, target))
+        metrics[target] = result
+        print(f"{target}: {json.dumps(result, sort_keys=True)}")
+        X = frame[FEATURES].apply(pd.to_numeric, errors="coerce")
+        deviation = frame[target] - frame.run_mean
+        usable = deviation.notna()
+        medians = X.loc[usable].median().fillna(0)
+        filled = X.fillna(medians)
+        model = RidgeCV(alphas=[1, 10, 100, 1000]).fit(filled.loc[usable], deviation[usable])
+        predictions = model.predict(filled.loc[usable])
+        export["targets"][target] = {
+            "intercept": float(model.intercept_),
+            "weights": dict(zip(FEATURES, map(float, model.coef_))),
+            "feature_stats": {c: {"mean": float(filled.loc[usable,c].mean()),
+                                   "std": float(filled.loc[usable,c].std() or 1),
+                                   "median": float(medians[c])} for c in FEATURES},
+            "scale": {"min": float(df[target].min()), "max": float(df[target].max())},
+            "bands": {"low": float(np.percentile(predictions,33)), "high": float(np.percentile(predictions,67))},
+            "people": int(frame.person.nunique()), "days": len(frame), **result}
+    out = HERE / "model/energy_model.json"
+    out.parent.mkdir(exist_ok=True)
+    out.write_text(json.dumps(export, indent=2)+"\n")
+    (HERE / "model/evaluation.json").write_text(json.dumps(metrics, indent=2)+"\n")
+    print(f"Wrote {out}. Copy to Shared/energy_model.json after reviewing the evaluation.")
 
 
-export = {"baseline_window_days": BASELINE_WINDOW, "min_history_days": MIN_HISTORY, "targets": {}}
-
-for target in TARGETS:
-    frame = df[df[target].notna()].copy()
-    frame["run_mean"] = running_mean(frame, target)
-
-    gains = leave_one_person_out(frame, target)
-    print(f"\n=== {target} ===")
-    print(f"  leave-one-person-out: helped {int((gains > 0).sum())}/{len(gains)} people, "
-          f"mean correlation gain {gains.mean():+.3f}")
-
-    # Final fit uses everyone, because the shipped model has never met the user.
-    X = fill(frame[FEATURES].apply(pd.to_numeric, errors="coerce"))
-    deviation = frame[target].values - frame["run_mean"].values
-    usable = ~np.isnan(deviation)
-    model = build_model().fit(X[usable], deviation[usable])
-
-    # Reference only: the weights below apply to RAW feature values.
-    stats = {c: {"mean": float(X[c].mean()), "std": float(X[c].std() or 1.0)} for c in FEATURES}
-    predicted_deviation = model.predict(X[usable])
-    bands = {"low": float(np.percentile(predicted_deviation, 33)),
-             "high": float(np.percentile(predicted_deviation, 67))}
-    export["targets"][target] = {
-        "intercept": float(model.intercept_),
-        "weights": {c: float(w) for c, w in zip(FEATURES, model.coef_)},
-        "feature_stats": stats,
-        "scale": {"min": float(df[target].min()), "max": float(df[target].max())},
-        "bands": bands,
-        "people": int(frame.person.nunique()),
-        "days": int(len(frame)),
-        "mean_correlation_gain": float(gains.mean()),
-        "people_helped": f"{int((gains > 0).sum())}/{len(gains)}",
-    }
-    for name, weight in export["targets"][target]["weights"].items():
-        print(f"  {name:20s} weight {weight:+.4f}")
-    print(f"  intercept {model.intercept_:+.4f}")
-
-out = here / "model" / "energy_model.json"
-out.parent.mkdir(exist_ok=True)
-out.write_text(json.dumps(export, indent=2))
-print(f"\nwrote {out} ({out.stat().st_size} bytes)")
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,28 @@
+{
+  "fatigue": {
+    "people_helped": "12/16",
+    "mean_correlation_gain": 0.1571374063206219,
+    "baseline_correlation": -0.05364748183786446,
+    "model_correlation": 0.10348992448275741,
+    "gain_ci95": [
+      0.08057823586816774,
+      0.23596500349965377
+    ],
+    "wilcoxon_p": 0.00335693359375,
+    "mae_baseline": 0.5021465081271469,
+    "mae_model": 0.4972915792322094
+  },
+  "readiness": {
+    "people_helped": "14/16",
+    "mean_correlation_gain": 0.07259639133845287,
+    "baseline_correlation": 0.05131739622403384,
+    "model_correlation": 0.12391378756248671,
+    "gain_ci95": [
+      0.030756690647281724,
+      0.12182177728777294
+    ],
+    "wilcoxon_p": 0.00213623046875,
+    "mae_baseline": 1.152102810132213,
+    "mae_model": 1.1554582014606354
+  }
+}

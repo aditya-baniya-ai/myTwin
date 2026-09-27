@@ -11,7 +11,7 @@ struct ChatView: View {
             switch SystemLanguageModel.default.availability {
             case .available:
                 conversation
-            case .unavailable where chat.gemini.isActive:
+            case .unavailable where chat.proEnabled && chat.gemini.isActive:
                 conversation                    // Gemini can answer while online
             case .unavailable(let reason):
                 ContentUnavailableView("Chat isn't available", systemImage: "sparkles",

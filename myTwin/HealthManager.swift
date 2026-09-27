@@ -144,10 +144,48 @@ final class HealthManager {
         try await store.save(HKQuantitySample(type: type, quantity: quantity, start: date, end: date))
     }
 
+    /// Saves a meal to Apple Health: calories always, macros only when given. Asks to
+    /// write dietary energy the first time; the macro types ride along on the same grant
+    /// since HealthKit asks for all of them together the first time any one is needed.
+    func logMeal(calories: Double, protein: Double? = nil, carbs: Double? = nil,
+                fat: Double? = nil, at date: Date = .now) async throws {
+        let energyType = HKQuantityType(.dietaryEnergyConsumed)
+        let toWrite: Set<HKSampleType> = [
+            energyType, HKQuantityType(.dietaryProtein),
+            HKQuantityType(.dietaryCarbohydrates), HKQuantityType(.dietaryFatTotal),
+        ]
+        if store.authorizationStatus(for: energyType) != .sharingAuthorized {
+            try await store.requestAuthorization(toShare: toWrite, read: readTypes)
+        }
+        guard store.authorizationStatus(for: energyType) == .sharingAuthorized else {
+            throw HealthError.cantSaveMeal
+        }
+
+        var samples = [HKQuantitySample(type: energyType,
+                                        quantity: HKQuantity(unit: .kilocalorie(), doubleValue: calories),
+                                        start: date, end: date)]
+        func gram(_ id: HKQuantityTypeIdentifier, _ value: Double?) {
+            guard let value else { return }
+            samples.append(HKQuantitySample(type: HKQuantityType(id),
+                                            quantity: HKQuantity(unit: .gram(), doubleValue: value),
+                                            start: date, end: date))
+        }
+        gram(.dietaryProtein, protein)
+        gram(.dietaryCarbohydrates, carbs)
+        gram(.dietaryFatTotal, fat)
+        try await store.save(samples)
+    }
+
     enum HealthError: LocalizedError {
         case cantSaveWeight
+        case cantSaveMeal
         var errorDescription: String? {
-            "myTwin isn't allowed to save weight. Turn it on in Settings › Health › Data Access & Devices › myTwin."
+            switch self {
+            case .cantSaveWeight:
+                return "myTwin isn't allowed to save weight. Turn it on in Settings › Health › Data Access & Devices › myTwin."
+            case .cantSaveMeal:
+                return "myTwin isn't allowed to save meals. Turn it on in Settings › Health › Data Access & Devices › myTwin."
+            }
         }
     }
 

@@ -21,9 +21,9 @@ final class Subscription {
 
     /// Starts RevenueCat and reads what this person already owns.
     func start() async {
-        guard let key = ProKey.current else { return }        // no key yet: everything is free
+        guard let key = ProKey.current else { problem = "Purchases are not configured in this build."; return }
         Purchases.logLevel = .warn
-        Purchases.configure(withAPIKey: key)
+        if !Purchases.isConfigured { Purchases.configure(withAPIKey: key) }
         await refresh()
         await loadOfferings()
     }
@@ -31,11 +31,15 @@ final class Subscription {
     /// Asks RevenueCat what this person owns right now.
     func refresh() async {
         guard ProKey.current != nil else { return }
-        let info = try? await Purchases.shared.customerInfo()
-        isPro = info?.entitlements[Self.entitlement]?.isActive == true
+        guard Purchases.isConfigured else { return }
+        if let info = try? await Purchases.shared.customerInfo() {
+            isPro = info.entitlements[Self.entitlement]?.isActive == true
+        }
     }
 
-    private func loadOfferings() async {
+    func loadOfferings() async {
+        guard Purchases.isConfigured else { return }
+        problem = nil
         do {
             let offerings = try await Purchases.shared.offerings()
             offering = offerings.current
@@ -48,7 +52,12 @@ final class Subscription {
 
     /// Keeps up with purchases made elsewhere — another device, or the Customer Center.
     func watchForChanges() async {
-        guard ProKey.current != nil else { return }
+        // Configuration happens in the other view task; do not race its startup.
+        while !Purchases.isConfigured && !Task.isCancelled {
+            guard ProKey.current != nil else { return }
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        guard !Task.isCancelled else { return }
         for await info in Purchases.shared.customerInfoStream {
             isPro = info.entitlements[Self.entitlement]?.isActive == true
         }
@@ -74,6 +83,7 @@ final class Subscription {
     /// no Apple subscription exists — so this switches to a fresh RevenueCat user instead,
     /// which is the closest thing to starting over without deleting the app.
     func resetForTesting() async {
+        guard Purchases.isConfigured else { problem = "Purchases are not configured in this build."; return }
         busy = true
         problem = nil
         defer { busy = false }
@@ -88,6 +98,7 @@ final class Subscription {
 #endif
 
     func restore() async {
+        guard Purchases.isConfigured else { problem = "Purchases are not configured in this build."; return }
         busy = true
         problem = nil
         defer { busy = false }

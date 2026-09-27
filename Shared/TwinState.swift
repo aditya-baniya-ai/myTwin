@@ -19,9 +19,15 @@ enum TwinState {
         return store.double(forKey: startKey)
     }
 
-    static func save(dayStart: Double, on date: Date = .now) {
+    static func save(dayStart: Double, on date: Date = .now, hasPrediction: Bool = true) {
+        store?.set(hasPrediction, forKey: "hasPrediction")
         store?.set(dayStart, forKey: startKey)
         store?.set(date, forKey: dayKey)
+    }
+
+    static func hasPrediction(on date: Date = .now) -> Bool {
+        guard let saved = store?.object(forKey: dayKey) as? Date else { return false }
+        return Calendar.current.isDate(saved, inSameDayAs: date) && store?.bool(forKey: "hasPrediction") == true
     }
 
     /// The energy score, 0-100, at `date`.

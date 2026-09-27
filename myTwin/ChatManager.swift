@@ -16,6 +16,7 @@ final class ChatManager {
     var isResponding = false
     /// Gemini is part of Pro; without it Dash answers from the model on the iPhone.
     var proEnabled = false
+    var rescueDay: ((Int?) -> Void)?
     let calendar: CalendarManager
     let gemini: GeminiAccess
 
@@ -70,7 +71,16 @@ final class ChatManager {
         isResponding = true
         defer { isResponding = false }
 
+        if let request = RescueIntent.parse(text), let rescueDay {
+            rescueDay(request.minutes)
+            messages.append(ChatMessage(isUser: false, text: "Let's find a manageable option. Review the rescue preview and confirm before anything changes."))
+            return
+        }
         if proEnabled, gemini.isActive, await answerWithGemini(text) { return }
+        guard case .available = SystemLanguageModel.default.availability else {
+            messages.append(ChatMessage(isUser: false, text: "On-device chat isn't available here. You can still check in and use Rescue my day on the Dash screen."))
+            return
+        }
 
         let reply: String
         do {

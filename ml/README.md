@@ -1,75 +1,76 @@
-# Energy prediction
+# Energy-model research
 
-What the app predicts, how it was measured, and what it honestly cannot do.
+The shipped app uses five inputs: relative sleep duration, sleep efficiency, relative
+deep sleep, relative REM sleep, and relative resting heart rate. It predicts deviation
+from usual readiness. It requires today's sleep and seven usable prior nights within
+14 calendar days. Missing features use exported training medians. Ten daily ratings
+allow a separate personal fit to start blending in.
 
-## The short version
+## Current reproducible evaluation
 
-The model predicts **whether today is better or worse than your own normal**, not an
-absolute energy score. It is your own running average plus a small ridge regression on
-three sleep features. It needs about two weeks of your own data before it says anything.
+Leave-one-person-out evaluation on the locally available PMData derived table (16
+people, 1,747 labelled days). Imputation is fitted on training people only. Coefficients
+are fitted on all eligible rows after evaluation. Exact outputs are in
+`model/evaluation.json`; these replace the earlier three-feature Fitbit-score results.
 
-Measured with leave-one-person-out evaluation on PMData (16 people, 1,747 labelled days):
-
-| Target | Within-person correlation | People improved | Wilcoxon p |
+| Target | Mean within-person correlation | People improved | Wilcoxon p |
 |---|---|---|---|
-| Fatigue (1–5) | −0.054 → **+0.128** | 12/16 | 0.008 |
-| Readiness (0–10) | +0.051 → **+0.188** | 14/16 | 0.001 |
+| Fatigue | -0.054 → +0.103 | 12/16 | 0.0034 |
+| Readiness | +0.051 → +0.124 | 14/16 | 0.0021 |
 
-Mean gain +0.181 (95% CI +0.090 to +0.273) for fatigue, +0.111 (+0.057 to +0.171) for
-readiness. Absolute error barely moves (readiness MAE 1.152 → 1.151), which is why the
-app talks about direction, never a number out of ten.
+Readiness MAE: **1.152 baseline, 1.155 model**. Fatigue MAE: **0.502 baseline,
+0.497 model**. Mean correlation gains are +0.157 (bootstrap 95% CI +0.081 to +0.236)
+for fatigue and +0.073 (+0.031 to +0.122) for readiness. These small exploratory
+results do not establish individual accuracy, clinical validity, or causal benefits
+from suggested activities. Confidence intervals resample participants, not days.
 
-## What did not work
+The evaluation adds predicted deviations to each participant's expanding prior
+self-report mean. The app shows a direction band rather than that absolute score.
+The historical feature table uses 14 prior report rows for normalization; the app
+uses 14 calendar days. Missing-report and cross-device effects remain unvalidated.
+The same held-out folds informed model selection, so this is exploratory evaluation,
+not an untouched external test set.
 
-- **LifeSnaps** (71 people, Fitbit Sense, HRV and SpO2 included): no usable signal. Its
-  mood items are yes/no ticks rather than ratings. Daily "tired" gave per-user AUC 0.509
-  (chance). Hourly, the clock alone scored 0.622 and the clock plus wearable 0.619, so the
-  sensors added nothing. Within a person, tiredness tracked hour of day (+0.175) and
-  nothing else (heart rate −0.013, steps −0.018, sleep duration −0.050, HRV −0.018).
-- **LightGBM** on 16 or 52 features was worse than the ridge *and* worse than the baseline
-  on error: 16 people cannot support that many features.
-- **Cold start** (a new user, no personal history) was worse than guessing the group
-  average. Hence the two-week warm-up.
+## Reproduce
 
-## Reproducing it
+From the repository root:
 
-```bash
-python3 -m venv .venv && ./.venv/bin/pip install pandas numpy scikit-learn scipy lightgbm
-./.venv/bin/python download_pmdata.py     # ~84 MB from the Hugging Face mirror
-./.venv/bin/python train_final.py         # writes model/energy_model.json
+```sh
+python3 -m venv .venv
+.venv/bin/pip install numpy pandas scipy scikit-learn lightgbm requests
+# If you do not already have the derived table:
+cd ml
+../.venv/bin/python download_pmdata.py
+../.venv/bin/python train_pmdata.py  # exports data/pmdata_features.csv, then runs legacy comparisons
+cd ..
+.venv/bin/python ml/train_final.py
+.venv/bin/python ml/significance.py
+# After reviewing the evaluation:
+cp ml/model/energy_model.json Shared/energy_model.json
 ```
 
-`data/pmdata_features.csv` is the derived table (1,747 rows) the results come from, so
-`train_final.py` runs without downloading anything.
+Raw data and the derived CSV are **not committed**. `train_final.py` and
+`significance.py` use the local derived table and do not download data. The raw-data
+rebuild was not repeated in this verification because those files are absent.
 
-| Script | What it does |
-|---|---|
-| `download_pmdata.py` | Fetches the PMData files used here, skipping food photos and minute-level heart rate |
-| `train_pmdata.py` | Builds the feature table and compares baselines against LightGBM |
-| `ridge_pmdata.py` | The ridge model that won |
-| `significance.py` | Per-person paired test behind the numbers above |
-| `assoc_pmdata.py` | Which signals track fatigue/readiness within a person |
-| `audit_pmdata.py` | Join validation and feature coverage |
-| `train_lifesnaps.py`, `train_hourly.py`, `diagnose.py`, `graded.py` | The LifeSnaps investigation |
-| `train_final.py` | Fits the shipped model and exports plain coefficients |
+The exporter preserves the checked-in `hourly_charge` illustration from Shared.
+That curve is separate from the sleep regression: historical LifeSnaps tiredness
+reports were smoothed and rescaled, with hand-set overnight/morning behavior. The
+percentages are not validated battery measurements. To rebuild that curve with your
+own local LifeSnaps file:
 
-## Method notes worth keeping
+```sh
+python3 ml/drain_curve.py /path/to/hourly_fitbit_sema_df_unprocessed.csv
+```
 
-- Always compare against **each person's own running average**, not the group average.
-  Published papers reporting R² ≈ 0.79 often use k-fold splits with the same people in
-  train and test, which inflates results.
-- Validate joins before believing a null result. Self-reported sleep hours versus Fitbit
-  minutes asleep gave r = +0.678 at zero day shift, against +0.011 and +0.042 at ±1 day,
-  proving nights were matched to the right morning reports.
-- A silent bug to watch for: `sleep_score.csv` and `resting_heart_rate.json` both contain
-  a `resting_heart_rate` column, so a naive merge collides and leaves it 1.9% populated.
+`healthkit_only.py`, `window_test.py`, and other scripts are historical exploratory
+experiments and may require running from `ml/` or access to the original datasets.
+Their numbers must not be substituted for the current exporter evaluation.
 
-## Data and licences
+## Data provenance
 
-- **PMData** — 16 people, 5 months, Fitbit Versa 2 plus daily self-reports.
-  <https://datasets.simula.no/pmdata/>. The dataset page states **CC BY-NC 4.0**
-  (non-commercial); the Hugging Face mirror `aai530-group6/pmdata` states CC BY 4.0.
-  Treat it as non-commercial and attribute the authors. Raw data is **not** committed here;
-  `download_pmdata.py` fetches it.
-- **LifeSnaps** — CC BY 4.0, <https://doi.org/10.5281/zenodo.6826682>. Tested and rejected;
-  not required to reproduce the shipped model.
+PMData: https://datasets.simula.no/pmdata/ — 16 participants, Fitbit and self-reports.
+The source page identifies a non-commercial licence; resolve usage rights before
+commercial model distribution. Raw participant records are not included here.
+LifeSnaps: https://doi.org/10.5281/zenodo.6826682 — the source of the historical
+illustrative hourly pattern, not a validated personal energy predictor.

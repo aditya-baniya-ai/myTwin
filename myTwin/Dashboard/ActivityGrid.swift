@@ -1,14 +1,6 @@
 import Charts
 import SwiftUI
 
-/// Your daily targets. Change them here.
-enum Goals {
-    static let steps = 10_000.0
-    static let activeEnergy = 500.0      // kcal
-    static let sleep = 8.0               // hours
-    static let weight = 140.0            // lb
-}
-
 /// Today at a glance, one card per measure, in two columns.
 struct ActivityGrid: View {
     let steps: Double?
@@ -16,6 +8,7 @@ struct ActivityGrid: View {
     let sleepWeek: [Double?]             // hours a night, oldest first: the last is last night
     let weights: [WeightSample]          // oldest first
     /// Shows a + on the Weight card that calls this.
+    var preferences: PlanningPreferences = .load()
     var addWeight: (() -> Void)?
 
     @State private var shown = false
@@ -29,17 +22,17 @@ struct ActivityGrid: View {
         LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
             GlanceCard(title: "Steps", symbol: "figure.walk", tint: Self.stepColors[0],
                        value: steps.map { Int($0).formatted() } ?? "—",
-                       detail: "of \(Int(Goals.steps).formatted())") {
-                ring((steps ?? 0) / Goals.steps, Self.stepColors)
+                       detail: preferences.stepGoal.map { "of \(Int($0).formatted())" } ?? "No target set") {
+                ring(preferences.stepGoal.map { (steps ?? 0) / max($0, 1) } ?? 0, Self.stepColors, label: preferences.stepGoal == nil ? "—" : nil)
             }
             GlanceCard(title: "Active Energy", symbol: "flame.fill", tint: Self.moveColors[0],
                        value: activeEnergy.map { "\(Int($0)) kcal" } ?? "—",
-                       detail: "of \(Int(Goals.activeEnergy)) kcal") {
-                ring((activeEnergy ?? 0) / Goals.activeEnergy, Self.moveColors)
+                       detail: preferences.activeEnergyGoal.map { "of \(Int($0)) kcal" } ?? "No target set") {
+                ring(preferences.activeEnergyGoal.map { (activeEnergy ?? 0) / max($0, 1) } ?? 0, Self.moveColors, label: preferences.activeEnergyGoal == nil ? "—" : nil)
             }
             GlanceCard(title: "Sleep", symbol: "bed.double.fill", tint: Self.sleepColors[0],
                        value: sleepWeek.last.flatMap { $0 }.map { String(format: "%.1f h", $0) } ?? "—",
-                       detail: "last night · goal \(Int(Goals.sleep)) h") {
+                       detail: "last night · goal \(Int(preferences.sleepGoal)) h") {
                 sleepBars
             }
             GlanceCard(title: "Weight", symbol: "scalemass.fill", tint: Self.weightColors[0],
@@ -71,7 +64,7 @@ struct ActivityGrid: View {
                     .cornerRadius(3)
                     .foregroundStyle(Self.sleepColors[0].opacity(index == sleepWeek.count - 1 ? 1 : 0.45))
             }
-            RuleMark(y: .value("Goal", Goals.sleep))
+            RuleMark(y: .value("Goal", preferences.sleepGoal))
                 .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
                 .foregroundStyle(.secondary)
         }
@@ -86,17 +79,18 @@ struct ActivityGrid: View {
     /// How far you've come from your first weigh-in in the window towards the target,
     /// whether you're losing or gaining.
     private var weightProgress: Double {
-        guard let first = weights.first?.pounds, let latest = weights.last?.pounds else { return 0 }
-        let journey = abs(first - Goals.weight)
-        guard journey > 0.1 else { return abs(latest - Goals.weight) < 0.5 ? 1 : 0 }
-        return min(max(1 - abs(latest - Goals.weight) / journey, 0), 1)
+        guard let goal = preferences.weightGoal, let first = weights.first?.pounds, let latest = weights.last?.pounds else { return 0 }
+        let journey = abs(first - goal)
+        guard journey > 0.1 else { return abs(latest - goal) < 0.5 ? 1 : 0 }
+        return min(max(1 - abs(latest - goal) / journey, 0), 1)
     }
 
     private var weightDetail: String {
         guard let latest = weights.last?.pounds else { return "No weigh-ins yet" }
-        let left = abs(latest - Goals.weight)
-        return left < 0.5 ? "At your \(Int(Goals.weight)) lb target"
-                          : String(format: "%.1f lb to %d lb", left, Int(Goals.weight))
+        guard let goal = preferences.weightGoal else { return "No weight target set" }
+        let left = abs(latest - goal)
+        return left < 0.5 ? "At your \(Int(goal)) lb target"
+                          : String(format: "%.1f lb to %d lb", left, Int(goal))
     }
 }
 
@@ -148,6 +142,7 @@ private struct GlanceCard<Chart: View>: View {
 /// that reads weight see it.
 struct LogWeightSheet: View {
     let last: Double?
+    var goal: Double? = nil
     let save: (Double) async throws -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -173,9 +168,9 @@ struct LogWeightSheet: View {
                         .focused($focused)
                     Text("lb").font(.title2.weight(.semibold)).foregroundStyle(.secondary)
                 }
-                Text("Target \(Int(Goals.weight)) lb")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                if let goal {
+                    Text("Your target: \(Int(goal)) lb").font(.subheadline).foregroundStyle(.secondary)
+                }
                 if let problem {
                     Text(problem).font(.footnote).foregroundStyle(.red).multilineTextAlignment(.center)
                 }

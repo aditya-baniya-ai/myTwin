@@ -63,6 +63,7 @@ struct EnergyModel {
     private struct Stat: Decodable {
         let mean: Double
         let std: Double
+        let median: Double?
     }
 
     private struct Bands: Decodable {
@@ -105,22 +106,23 @@ struct EnergyModel {
     /// Nights that actually hold data, newest first. Counting calendar days instead would
     /// call a year of empty days "history" and then fail to compare anything.
     func usableNights(in history: [DaySignals]) -> [DaySignals] {
-        history.dropFirst()
-            .filter { $0.asleepMinutes != nil || $0.restingHR != nil }
-            .prefix(maximumNights)
-            .map { $0 }
+        guard let today = history.first?.date,
+              let cutoff = Calendar.current.date(byAdding: .day, value: -file.baselineWindowDays, to: today)
+        else { return [] }
+        return history.dropFirst()
+            .filter { $0.date >= cutoff && $0.date < today && $0.asleepMinutes != nil }
+            .prefix(file.baselineWindowDays).map { $0 }
     }
 
     /// Enough nights to judge what is normal for someone.
-    static let minimumNights = 3
-    private var maximumNights: Int { max(file.baselineWindowDays, 30) }
+    var minimumNights: Int { file.minHistoryDays }
 
     /// Today's features, or nil when there is not enough history to compare against.
     /// `history` is most recent first; the first entry is today.
     func features(from history: [DaySignals]) -> [String: Double]? {
         guard let today = history.first else { return nil }
         let baseline = usableNights(in: history)
-        guard baseline.count >= Self.minimumNights else { return nil }
+        guard baseline.count >= minimumNights, today.asleepMinutes != nil else { return nil }
 
         var values: [String: Double] = [:]
         for name in featureOrder {
@@ -169,13 +171,13 @@ struct EnergyModel {
                              daysOfHistory: daysOfHistory, ratingsUsed: ratingsUsed)
     }
 
-    /// Missing signals fall back to the average seen in training. Skipping them instead
+    /// Missing signals use the training median exported with the model. Skipping them instead
     /// leaves the intercept uncounterweighted, which pushed every day to "below normal"
     /// for anyone without full sleep data.
     private func score(_ values: [String: Double], intercept: Double, weights: [String: Double]) -> Double {
         var total = intercept
         for (name, weight) in weights {
-            let value = values[name] ?? target.featureStats[name]?.mean ?? 0
+            let value = values[name] ?? target.featureStats[name]?.median ?? target.featureStats[name]?.mean ?? 0
             total += weight * value
         }
         return total

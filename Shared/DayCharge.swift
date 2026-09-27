@@ -35,6 +35,7 @@ extension DayCharge {
     /// The model's forecast for the rest of the day: now, then the top of each hour up to
     /// `end`, at most `hours` ahead.
     static func forecast(from start: Double, now: Date = .now, until end: Date, hours: Int = 12) -> [EnergyPoint] {
+        guard end > now, hours > 0 else { return [] }
         let calendar = Calendar.current
         let limit = min(end, now.addingTimeInterval(TimeInterval(hours) * 3600))
         var points = [EnergyPoint(date: now, charge: remaining(from: start, at: now))]

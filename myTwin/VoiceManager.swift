@@ -56,13 +56,13 @@ final class VoiceManager {
     var statusNote: String? {
         switch status {
         case .idle: nil
-        case .preparing: nil
+        case .preparing: "Preparing on-device speech… You can type in chat while it loads."
         case _ where isInterrupted: "Your microphone is busy with a call."
         case .listening where !isHearing: nil            // starting up: not worth saying
         case .listening: isDictating ? listeningHint
                        : isAwake ? "Listening…"
                                  : "Tap Dash to talk, or say \"twin\"."
-        case .unavailable: nil                           // nothing you can do about it here
+        case .unavailable(let reason): reason
         }
     }
 

@@ -33,6 +33,7 @@ final class CalendarManager {
     var week: [EKEvent] = []
     var pendingChange: CalendarChange?
     var errorMessage: String?
+    private(set) var revision = 0
 
     func requestAccess() async {
         do {
@@ -48,7 +49,8 @@ final class CalendarManager {
     }
 
     func loadTodayEvents() {
-        guard isAuthorized else { return }
+        isAuthorized = EKEventStore.authorizationStatus(for: .event) == .fullAccess
+        guard isAuthorized else { events = []; week = []; return }
         let start = Calendar.current.startOfDay(for: .now)
         let end = Calendar.current.date(byAdding: .day, value: 1, to: start)!
         let predicate = store.predicateForEvents(withStart: start, end: end, calendars: nil)
@@ -112,6 +114,7 @@ final class CalendarManager {
     func proposeAdd(title: String, hour: Int, minute: Int, durationMinutes: Int) -> String {
         guard isAuthorized else { return noAccessText }
         guard let start = todayAt(hour: hour, minute: minute) else { return "That time isn't valid." }
+        guard (5...1440).contains(durationMinutes) else { return "Choose a duration from 5 minutes to 24 hours." }
         let end = start.addingTimeInterval(TimeInterval(durationMinutes * 60))
         return propose(CalendarChange(kind: .add, event: nil, title: title, start: start, end: end))
     }
@@ -144,10 +147,79 @@ final class CalendarManager {
         event.calendar = store.defaultCalendarForNewEvents
         do {
             try store.save(event, span: .thisEvent)
-            loadTodayEvents()
+            didMutate()
         } catch {
             errorMessage = "Couldn't add \"\(title)\": \(error.localizedDescription)"
         }
+    }
+
+    private func didMutate() {
+        errorMessage = nil
+        loadTodayEvents()
+        loadWeekEvents()
+        revision += 1
+    }
+
+    enum PlanningError: LocalizedError {
+        case unavailable, changed, conflict, invalidTime
+        var errorDescription: String? {
+            switch self {
+            case .unavailable: "Connect a writable calendar to save this plan."
+            case .changed: "That activity changed in Calendar. Refresh the preview before trying again."
+            case .conflict: "Your calendar changed and this time is no longer free. Make a new preview."
+            case .invalidTime: "This time has passed or runs past bedtime. Make a new preview."
+            }
+        }
+    }
+
+    /// Only an event created by this installation and still matching the preview is mutable.
+    func matches(_ action: PlannedAction) -> Bool {
+        guard let id = action.eventID, let event = store.event(withIdentifier: id) else { return false }
+        return event.url?.absoluteString == "mytwin://activity/\(action.id.uuidString)"
+            && event.title == action.title && event.startDate == action.start && event.endDate == action.end
+            && event.calendar.allowsContentModifications && !event.hasRecurrenceRules
+    }
+
+    func saveActivity(_ action: PlannedAction, replacing original: PlannedAction?, bedtime: Date) throws -> PlannedAction {
+        loadTodayEvents()
+        guard isAuthorized else { throw PlanningError.unavailable }
+        guard action.end > action.start, action.start >= Date.now, action.end <= bedtime else { throw PlanningError.invalidTime }
+        if let original, !matches(original) { throw PlanningError.changed }
+        let predicate = store.predicateForEvents(withStart: action.start, end: action.end, calendars: nil)
+        let busy = store.events(matching: predicate).filter { !$0.isAllDay && $0.eventIdentifier != original?.eventID }
+        guard !busy.contains(where: { $0.startDate < action.end && $0.endDate > action.start }) else { throw PlanningError.conflict }
+        let event: EKEvent
+        if let id = original?.eventID, let existing = store.event(withIdentifier: id) { event = existing }
+        else {
+            guard let calendar = store.defaultCalendarForNewEvents, calendar.allowsContentModifications else { throw PlanningError.unavailable }
+            event = EKEvent(eventStore: store)
+            event.calendar = calendar
+        }
+        event.title = action.title
+        event.startDate = action.start
+        event.endDate = action.end
+        event.url = URL(string: "mytwin://activity/\(action.id.uuidString)")
+        try store.save(event, span: .thisEvent)
+        var saved = action
+        saved.eventID = event.eventIdentifier
+        didMutate()
+        return saved
+    }
+
+    func undoActivity(_ action: PlannedAction, restoring original: PlannedAction?) throws {
+        guard matches(action), let id = action.eventID, let event = store.event(withIdentifier: id) else { throw PlanningError.changed }
+        if let original {
+            let predicate = store.predicateForEvents(withStart: original.start, end: original.end, calendars: nil)
+            guard !store.events(matching: predicate).contains(where: {
+                !$0.isAllDay && $0.eventIdentifier != id && $0.startDate < original.end && $0.endDate > original.start
+            }) else { throw PlanningError.conflict }
+            event.title = original.title
+            event.startDate = original.start
+            event.endDate = original.end
+            event.url = URL(string: "mytwin://activity/\(original.id.uuidString)")
+            try store.save(event, span: .thisEvent)
+        } else { try store.remove(event, span: .thisEvent) }
+        didMutate()
     }
 
     // MARK: - Confirming changes
@@ -161,7 +233,7 @@ final class CalendarManager {
             if change.kind == .remove {
                 guard let event = change.event else { return "That event is no longer there." }
                 try store.remove(event, span: .thisEvent)
-                loadTodayEvents()
+                didMutate()
                 return "Removed \"\(change.title)\" from your calendar."
             }
 
@@ -173,7 +245,7 @@ final class CalendarManager {
             event.startDate = change.start
             event.endDate = change.end
             try store.save(event, span: .thisEvent)  // for repeating events, only today's one changes
-            loadTodayEvents()
+            didMutate()
             return "Done. \"\(change.title)\" is on your calendar at \(timeRangeText(change.start, change.end))."
         } catch {
             return "Sorry, I couldn't save that change. (\(error.localizedDescription))"
@@ -200,7 +272,8 @@ final class CalendarManager {
     }
 
     private func todayAt(hour: Int, minute: Int) -> Date? {
-        Calendar.current.date(bySettingHour: hour, minute: minute, second: 0, of: .now)
+        guard (0...23).contains(hour), (0...59).contains(minute) else { return nil }
+        return Calendar.current.date(bySettingHour: hour, minute: minute, second: 0, of: .now)
     }
 }
 

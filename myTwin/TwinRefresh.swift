@@ -1,4 +1,5 @@
 import Foundation
+import EventKit
 import WidgetKit
 
 /// Works out today's energy and hands it to everything that shows it, whether or not the
@@ -17,19 +18,19 @@ enum TwinRefresh {
         let (history, _) = await health.history()
         let reading = model.reading(from: history, diary: EnergyDiary())
         let dayStart = model.dayStart(for: reading)
-        share(dayStart: dayStart)
+        share(dayStart: dayStart, hasPrediction: reading != nil)
 
         let calendar = CalendarManager()
         calendar.loadTodayEvents()
         let trained = await !health.workoutsToday().isEmpty
         await schedule(reading: reading, dayStart: dayStart,
-                       bedtime: health.typicalBedtime(from: history), calendar: calendar,
+                       bedtime: (PlanningPreferences.load().bedtimeHour, PlanningPreferences.load().bedtimeMinute), calendar: calendar,
                        trained: trained, through: NotificationManager())
     }
 
     /// The twin the widget and the app icon show. One number, so all three agree.
-    static func share(dayStart: Double) {
-        TwinState.save(dayStart: dayStart)
+    static func share(dayStart: Double, hasPrediction: Bool = true) {
+        TwinState.save(dayStart: dayStart, hasPrediction: hasPrediction)
         WidgetCenter.shared.reloadAllTimelines()
     }
 
@@ -40,25 +41,7 @@ enum TwinRefresh {
         guard let reading else {
             return "myTwin needs a few more nights of sleep data before it can call your day."
         }
-        let start = dayStart ?? EnergyModel()?.dayStart(for: reading) ?? DayCharge.unknownDay
-        let charge = Int(DayCharge.remaining(from: start, at: .now) * 100)
-        let dip = dipHour(from: reading)
-        let opening: String
-        switch reading.band {
-        case .above: opening = "Today looks better than your normal, starting at \(charge)%."
-        case .normal: opening = "Today looks about normal for you, starting at \(charge)%."
-        case .below: opening = "Today looks below your normal, starting at \(charge)%."
-        }
-
-        // One thing worth doing, taken from the plan the app is already showing.
-        if let move = plan.first(where: { $0.kind == .suggestion }) {
-            let at = move.start.formatted(date: .omitted, time: .shortened)
-            return "\(opening) Your dip lands around \(dip). Best move: \(move.title.lowercased()) at \(at)."
-        }
-        let advice = reading.band == .below
-            ? "Keep it light and protect your evening."
-            : "Put the hard thing before your dip."
-        return "\(opening) Your dip lands around \(dip). \(advice)"
+        return "\(reading.headline). Open myTwin to check in and choose what fits today."
     }
 
     /// When the drain curve bottoms out today, in plain clock terms.
@@ -80,15 +63,13 @@ extension TwinRefresh {
     static func schedule(reading: EnergyReading?, dayStart: Double, bedtime: (hour: Int, minute: Int),
                          calendar: CalendarManager, trained: Bool,
                          through notifications: NotificationManager) async {
-        let plan = DayPlanner.plan(events: DayPlanner.items(from: calendar.events), dayStart: dayStart,
-                                   now: .now, bedtime: tonight(bedtime),
-                                   excluding: DismissedSuggestions.today(),
-                                   trained: trained, easyDay: reading?.band == .below)
-        let events = plan.filter { $0.kind == .event }.map { event in
-            (title: event.title, start: event.start, note: headsUp(at: event.start, dayStart: dayStart))
+        let events = calendar.events.filter { !$0.isAllDay }.map { event in
+            (title: event.title ?? "Upcoming event", start: event.startDate!,
+             note: "Starts at \(event.startDate.formatted(date: .omitted, time: .shortened)). Open myTwin to review your day.")
         }
+
         await notifications.reschedule(bedtime: bedtime,
-                                       brief: brief(for: reading, dayStart: dayStart, plan: plan),
+                                       brief: brief(for: reading, dayStart: dayStart),
                                        events: events)
     }
 
