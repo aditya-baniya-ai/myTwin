@@ -2,7 +2,7 @@ import XCTest
 @testable import myTwin
 
 final class DailySupportTests: XCTestCase {
-    @MainActor func testRescueRequiresProExceptFictionalSample() {
+    @MainActor func testRescueRequiresProExceptFictionalSample() async {
         let name = "myTwinTests.\(UUID())"
         let defaults = UserDefaults(suiteName: name)!
         defer { defaults.removePersistentDomain(forName: name) }
@@ -14,7 +14,7 @@ final class DailySupportTests: XCTestCase {
         XCTAssertFalse(personal.canRescue(proEnabled: false), "Previous use cannot bypass expired Pro")
         XCTAssertTrue(DailySupport(isSample: true, defaults: defaults).canRescue(proEnabled: false))
     }
-    @MainActor func testSampleCannotWritePersonalPreferencesOrHistory() {
+    @MainActor func testSampleCannotWritePersonalPreferencesOrHistory() async {
         let name = "myTwinTests.\(UUID())"
         let defaults = UserDefaults(suiteName: name)!
         defer { defaults.removePersistentDomain(forName: name) }
@@ -33,7 +33,7 @@ final class DailySupportTests: XCTestCase {
         XCTAssertEqual(restored.preferences.minutes, 45)
         XCTAssertTrue(restored.actions.isEmpty)
     }
-    @MainActor func testRescuePersistenceAndUndoRestoresOriginal() {
+    @MainActor func testRescuePersistenceAndUndoRestoresOriginal() async {
         let name = "myTwinTests.\(UUID())"
         let defaults = UserDefaults(suiteName: name)!
         defer { defaults.removePersistentDomain(forName: name) }
@@ -48,7 +48,7 @@ final class DailySupportTests: XCTestCase {
         XCTAssertEqual(restored.actions, [original])
         XCTAssertEqual(DailySupport(defaults: defaults).actions, [original])
     }
-    @MainActor func testRepeatedOutcomeEvidenceAndSkip() {
+    @MainActor func testRepeatedOutcomeEvidenceAndSkip() async {
         let daily = DailySupport(isSample: true)
         for index in 0..<3 {
             let walk = PlannedAction(movement: .walk, title: "Walk \(index)", start: .now, end: .now.addingTimeInterval(600))
