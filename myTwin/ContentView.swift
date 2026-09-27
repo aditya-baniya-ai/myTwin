@@ -248,7 +248,7 @@ struct ContentView: View {
         ScrollView {
             VStack(spacing: 18) {
                 if isSample { sampleBanner }
-                twinContent.frame(height: 420)
+                twinContent.frame(height: asksCheckIn ? 420 : 520)   // Dash takes the card's room
                 supportCard
                 ActionFeedbackView(daily: daily, now: planningNow)
 
@@ -416,7 +416,7 @@ struct ContentView: View {
                 }
             }
             Button("Why this plan?", systemImage: "info.circle") { showExplanation = true }
-            checkInCard
+            if asksCheckIn { checkInCard }
             if health.isAuthorized, !week.isEmpty {
                 DashboardSection(title: "Your last 7 days") { WeekStrip(days: week).dashboardCard() }
             }
@@ -782,7 +782,8 @@ struct ContentView: View {
     private var mood: AvatarEnergyState { AvatarEnergyState(score: charge * 100) }
 
     private var chargeLabel: some View {
-        Text(hasPrediction ? "\(Int(charge * 100))% · illustrative estimate" : "Still learning · check in below")
+        Text(hasPrediction ? "\(Int(charge * 100))% · illustrative estimate"
+                           : asksCheckIn ? "Still learning · check in below" : "Still learning")
             .font(.caption.weight(.semibold))
             .foregroundStyle(.secondary)
             .contentTransition(.numericText())
@@ -860,6 +861,8 @@ struct ContentView: View {
     private var fullAccess: Bool { isSample || pro.isPro }
     private var hasPrediction: Bool { energy != nil }
     private var canRescue: Bool { daily.canRescue(proEnabled: pro.isPro) }
+    /// Reads `now` so the card comes back when the hour turns into a new part of the day.
+    private var asksCheckIn: Bool { daily.asksForCheckIn(now: isSample ? SampleDay.now : max(now, .now)) }
     private var easyDay: Bool { daily.currentCheckIn.map { $0 == .low } ?? (energy?.band == .below) }
     private var effectivePreferences: PlanningPreferences {
         var value = daily.preferences
@@ -902,7 +905,7 @@ struct ContentView: View {
     }
     private var supportCard: some View {
         VStack(alignment: .leading, spacing: 14) {
-            checkInCard
+            if asksCheckIn { checkInCard.transition(.opacity) }
             if canRescue {
                 Button { openRescue() } label: {
                     Label("Rescue my day", systemImage: "wand.and.stars").font(.headline).frame(maxWidth: .infinity)
@@ -930,7 +933,7 @@ struct ContentView: View {
         else { pendingRescue = true; showPaywall = true }
     }
     private func recordCheckIn(_ value: ReportedEnergy) {
-        daily.report(value, now: planningNow)
+        withAnimation(.snappy) { daily.report(value, now: planningNow) }
         if !isSample, let todayFeatures { diary.record(rating: value.rating, features: todayFeatures) }
         // A check-in changes recommendations, not the measured sleep or plotted battery.
     }

@@ -119,7 +119,6 @@ final class DailySupport {
         }
         if isSample {
             let now = SampleDay.now
-            checkIn = EnergyCheckIn(date: now, energy: .low)
             actions = [PlannedAction(eventID: "sample-workout", movement: .strength,
                                      title: "Strength session", start: SampleDay.at(17), end: SampleDay.at(18)),
                        PlannedAction(movement: .walk, title: "Easy walk", start: now.addingTimeInterval(-3600),
@@ -132,6 +131,17 @@ final class DailySupport {
     var currentCheckIn: ReportedEnergy? {
         guard let checkIn, Calendar.current.isDate(checkIn.date, inSameDayAs: isSample ? SampleDay.now : .now) else { return nil }
         return checkIn.energy
+    }
+    /// Whether to ask "How do you feel right now?". Once answered, it waits for the next
+    /// part of the day (morning, afternoon, evening), since how you felt at nine says
+    /// little about nine at night.
+    func asksForCheckIn(now: Date) -> Bool {
+        guard let checkIn else { return true }
+        func part(_ date: Date) -> Int {
+            let hour = Calendar.current.component(.hour, from: date)
+            return hour < 12 ? 0 : hour < 17 ? 1 : 2
+        }
+        return !Calendar.current.isDate(checkIn.date, inSameDayAs: now) || part(checkIn.date) != part(now)
     }
     func report(_ energy: ReportedEnergy, now: Date = .now) {
         checkIn = EnergyCheckIn(date: isSample ? SampleDay.now : now, energy: energy)

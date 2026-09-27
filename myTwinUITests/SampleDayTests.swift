@@ -1,11 +1,18 @@
 import XCTest
 
 final class SampleDayTests: XCTestCase {
+    /// Dash's nudge slides in a few seconds after launch and can cover whatever a test is
+    /// scrolling to, so close it first.
+    @MainActor private func dismissNudge(_ app: XCUIApplication) {
+        let notNow = app.buttons["Not now"]
+        if notNow.waitForExistence(timeout: 8) { notNow.tap() }
+    }
     @MainActor func testSampleRescuePreviewConfirmUndoAndExplanation() {
         let app = XCUIApplication()
         app.launchArguments = ["--sample-day"]
         app.launch()
         XCTAssertTrue(app.staticTexts["Sample day · fictional data · 2 PM"].waitForExistence(timeout: 30))
+        dismissNudge(app)
         let rescue = app.buttons["Rescue my day"].firstMatch
         for _ in 0..<4 where !rescue.isHittable { app.swipeUp() }
         XCTAssertTrue(rescue.isHittable)
@@ -36,6 +43,7 @@ final class SampleDayTests: XCTestCase {
         app.launchArguments = ["--sample-day"]
         app.launch()
         XCTAssertTrue(app.staticTexts["Sample day · fictional data · 2 PM"].waitForExistence(timeout: 30))
+        dismissNudge(app)
         let preferences = app.buttons["Make it yours"].firstMatch
         for _ in 0..<4 where !preferences.isHittable { app.swipeUp() }
         preferences.tap()

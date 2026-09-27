@@ -63,4 +63,24 @@ final class DailySupportTests: XCTestCase {
         XCTAssertNil(daily.evidence(for: .stretch))
         XCTAssertEqual(daily.suggestedMovement, .walk)
     }
+    /// Answered once, the card waits for the next part of the day, or the next day.
+    @MainActor func testCheckInIsAskedAgainLaterInTheDay() async {
+        let name = "myTwinTests.\(UUID())"
+        let defaults = UserDefaults(suiteName: name)!
+        defer { defaults.removePersistentDomain(forName: name) }
+        func at(_ day: Int, _ hour: Int) -> Date {
+            Calendar.current.date(from: DateComponents(year: 2026, month: 9, day: day, hour: hour, minute: 30))!
+        }
+        let daily = DailySupport(defaults: defaults)
+        XCTAssertTrue(daily.asksForCheckIn(now: at(28, 9)), "never asked yet")
+        daily.report(.okay, now: at(28, 9))
+        XCTAssertFalse(daily.asksForCheckIn(now: at(28, 9)))
+        XCTAssertFalse(daily.asksForCheckIn(now: at(28, 11)), "still the morning")
+        XCTAssertTrue(daily.asksForCheckIn(now: at(28, 13)), "afternoon")
+        daily.report(.good, now: at(28, 13))
+        XCTAssertFalse(daily.asksForCheckIn(now: at(28, 16)))
+        XCTAssertTrue(daily.asksForCheckIn(now: at(28, 20)), "evening")
+        daily.report(.low, now: at(28, 20))
+        XCTAssertTrue(daily.asksForCheckIn(now: at(29, 20)), "same hour, next day")
+    }
 }
