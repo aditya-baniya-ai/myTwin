@@ -14,7 +14,8 @@ final class SampleDayTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Sample day · fictional data · 2 PM"].waitForExistence(timeout: 30))
         dismissNudge(app)
         let rescue = app.buttons["Rescue my day"].firstMatch
-        for _ in 0..<4 where !rescue.isHittable { app.swipeUp() }
+        // Slowly: a fast fling scrolls it from just below the screen to just above it.
+        for _ in 0..<4 where !rescue.isHittable { app.swipeUp(velocity: .slow) }
         XCTAssertTrue(rescue.isHittable)
         rescue.tap()
         app.buttons["Preview my rescue"].tap()
@@ -50,8 +51,14 @@ final class SampleDayTests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Make it yours"].waitForExistence(timeout: 5))
         let equipment = app.switches["I have strength equipment"]
         XCTAssertTrue(equipment.exists)
-        equipment.switches.firstMatch.tap()
-        XCTAssertEqual(equipment.value as? String, "1")
+        // The title appears while the sheet is still sliding up; wait until the switch takes
+        // touches, and press rather than tap, since an instant tap can miss a switch.
+        let toggle = equipment.switches.firstMatch
+        expectation(for: NSPredicate(format: "isHittable == true"), evaluatedWith: toggle)
+        waitForExpectations(timeout: 5)
+        toggle.press(forDuration: 0.2)
+        expectation(for: NSPredicate(format: "value == '1'"), evaluatedWith: equipment)
+        waitForExpectations(timeout: 3)
         app.buttons["Save"].tap()
         preferences.tap()
         XCTAssertEqual(app.switches["I have strength equipment"].value as? String, "1")

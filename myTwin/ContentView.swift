@@ -124,8 +124,8 @@ struct ContentView: View {
             await listen()
         }
         .task { await followTheHours() }
-        .task(id: tab) {
-            guard tab == .twin else { return }
+        // Dash speaks up on whichever page you're on, not only his own.
+        .task {
             try? await Task.sleep(for: .seconds(3))      // let the day load and him appear
             while !Task.isCancelled {
                 await considerNudge()
@@ -215,6 +215,7 @@ struct ContentView: View {
                     await health.refresh()          // your watch may have synced since
                     await updateEnergy()
                     await listen()
+                    await considerNudge()           // back in the app: anything worth saying now?
                 case .background:
                     chat.endGemini()
                     await voice.stopLiveVoice()
@@ -852,7 +853,7 @@ struct ContentView: View {
                                    isThinking: chat.isResponding, change: calendar.pendingChange,
                                    confirm: chat.confirmChange, cancel: chat.cancelChange)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
-            } else if let nudge, tab == .twin {
+            } else if let nudge {
                 NudgeCard(nudge: nudge, more: { tellMore(nudge) }, dismiss: { self.nudge = nil })
                     .padding(.horizontal, 16)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -1049,7 +1050,7 @@ struct ContentView: View {
     /// the plan and the calendar only come into it with Pro; the week and a long sit don't.
     private func considerNudge() async {
         if let at = nudgeAt, Date.now.timeIntervalSince(at) > 30 * 60 { nudge = nil }  // stale by now
-        guard nudge == nil, tab == .twin, !voice.isDictating, !chat.isResponding,
+        guard nudge == nil, !voice.isDictating, !chat.isResponding,
               calendar.pendingChange == nil else { return }
 
         let now = planningNow
