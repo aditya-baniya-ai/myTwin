@@ -18,6 +18,11 @@ struct ContentView: View {
     @State private var planningProblem: String?
     @State private var signalHistory: [DaySignals] = []
     @State private var dashGesture: AvatarGesture?
+    /// Something Dash brought up himself, and when. See DashNudges.
+    @State private var nudge: DashNudge?
+    @State private var nudgeAt: Date?
+    /// The sample day's own memory of nudges, so it never writes to the real one.
+    @State private var sampleNudgeLog = DashNudges.Log()
 
     @Environment(\.scenePhase) private var scenePhase
     @State private var health: HealthManager
@@ -124,6 +129,14 @@ struct ContentView: View {
                 await listen()
             }
             .task { await followTheHours() }
+            .task(id: tab) {
+                guard tab == .twin else { return }
+                try? await Task.sleep(for: .seconds(3))      // let the day load and him appear
+                while !Task.isCancelled {
+                    await considerNudge()
+                    try? await Task.sleep(for: .seconds(15 * 60))
+                }
+            }
             .task { if !isSample { await pro.watchForChanges() } }
             // Both models read today's plan through this, and only the screen knows the
             // day's charge, bedtime and what has been dismissed.
@@ -135,6 +148,9 @@ struct ContentView: View {
                     return TodayPlanText.summary(.init(dayStart: dayStart, bedtime: bedtimeDate,
                         events: currentEvents, dismissed: dismissed, trainedToday: trainedToday,
                         easyDay: easyDay, preferences: effectivePreferences))
+                }
+                chat.planSource.weekRecap = { [self] in
+                    WeekRecap.text(history: signalHistory, model: energyModel)
                 }
             }
             .onChange(of: pro.isPro, initial: true) {
@@ -381,6 +397,24 @@ struct ContentView: View {
         .accessibilityHint("Shows every energy state and gesture")
     }
 
+    /// The week as a few sentences rather than a chart. Hidden until there are enough
+    /// nights to say something true.
+    @ViewBuilder private var weekRecap: some View {
+        let lines = energyModel.map { WeekRecap.lines(history: signalHistory, model: $0) } ?? []
+        if !lines.isEmpty {
+            DashboardSection(title: "Your week") {
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(lines, id: \.self) { line in
+                        Text(line)
+                            .font(.subheadline)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .dashboardCard()
+            }
+        }
+    }
+
     private var predictionsPage: some View {
         page("Predictions", tab: .predictions) {
             if fullAccess && hasPrediction {
@@ -399,6 +433,7 @@ struct ContentView: View {
             if health.isAuthorized, !week.isEmpty {
                 DashboardSection(title: "Your last 7 days") { WeekStrip(days: week).dashboardCard() }
             }
+            weekRecap
             if !isSample { oftenAsked }
         }
     }
@@ -807,6 +842,10 @@ struct ContentView: View {
                                    isThinking: chat.isResponding, change: calendar.pendingChange,
                                    confirm: chat.confirmChange, cancel: chat.cancelChange)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else if let nudge, tab == .twin {
+                NudgeCard(nudge: nudge, more: { tellMore(nudge) }, dismiss: { self.nudge = nil })
+                    .padding(.horizontal, 16)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             if let note = voice.statusNote, tab == .twin {
                 Text(note)
@@ -998,6 +1037,42 @@ struct ContentView: View {
     }
 
     /// Wakes at the top of each hour, when the charge changes.
+    /// Lets Dash bring something up on his own when nothing else is happening. The forecast,
+    /// the plan and the calendar only come into it with Pro; the week and a long sit don't.
+    private func considerNudge() async {
+        if let at = nudgeAt, Date.now.timeIntervalSince(at) > 30 * 60 { nudge = nil }  // stale by now
+        guard nudge == nil, tab == .twin, !voice.isDictating, !chat.isResponding,
+              calendar.pendingChange == nil else { return }
+
+        let now = planningNow
+        let planning = fullAccess && hasPrediction
+        let situation = DashNudges.Situation(
+            now: now, dayStart: dayStart,
+            forecast: planning ? DayCharge.forecast(from: dayStart, now: now, until: bedtimeDate) : [],
+            events: planning ? currentEvents : [],
+            suggestions: planning ? plannedItems.filter { $0.kind == .suggestion } : [],
+            stepsLastTwoHours: isSample ? nil : await health.steps(since: now.addingTimeInterval(-2 * 3600)),
+            hasWeekRecap: !(energyModel.map { WeekRecap.lines(history: signalHistory, model: $0) } ?? []).isEmpty)
+
+        var log = isSample ? sampleNudgeLog : DashNudges.Log.load()
+        let found = DashNudges.next(situation, quiet: effectivePreferences.isQuiet(now), log: &log)
+        if isSample { sampleNudgeLog = log } else { log.save() }
+        guard let found else { return }
+
+        withAnimation(.snappy) { nudge = found }
+        nudgeAt = .now
+        dashGesture = nil                                 // a fresh value, so he waves again
+        DispatchQueue.main.async { dashGesture = AvatarGesture.all.first { $0.clip == "wave" } }
+        if voice.speaksAnswers { voice.speak(found.line) }
+    }
+
+    /// Takes Dash up on it: asks him the follow-up in the user's words. It isn't counted
+    /// among the questions they ask, since he brought it up.
+    private func tellMore(_ nudge: DashNudge) {
+        self.nudge = nil
+        Task { await chat.send(nudge.question, record: false) }
+    }
+
     private func followTheHours() async {
         while !Task.isCancelled {
             let nextHour = Calendar.current.nextDate(after: .now, matching: DateComponents(minute: 0),

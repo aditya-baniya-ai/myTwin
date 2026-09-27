@@ -130,6 +130,7 @@ final class GeminiChat {
         Use getWeekEvents for anything beyond today: tomorrow, a named weekday, the weekend, or the week ahead. Use it too when today is empty and the user asks what is coming up. Only mention events it returns.
         Use getHealthSummary for questions about sleep, heart rate, HRV, steps or energy, and only use numbers it returns.
         Use getTodayPlan for anything about energy later today, the best or worst time to do something, or what you have suggested: when to train, nap, or stop drinking coffee. Its suggestions are yours, not things the user has done or agreed to.
+        Use getWeekRecap when the user asks how their week went, what their best or worst day was, or what pattern their sleep has been following. Retell it in your own words; keep its reasons, and never add a cause it didn't give.
         To add, move or remove one of today's events, use addEvent, moveEvent or removeEvent. They don't save anything: the app shows the user a Confirm button. Tell the user to tap Confirm, and never say the change is done.
         You can only change today's events.
         Your answers are spoken aloud, so keep them to one to three short sentences, without lists or formatting.
@@ -143,6 +144,7 @@ final class GeminiChat {
         function("getTodayEvents", "Gets the user's calendar events for today, with start and end times."),
         function("getWeekEvents", "Gets the user's calendar for the next seven days, a day at a time, including today. Use for tomorrow, a named weekday, the weekend, or the week ahead."),
         function("getHealthSummary", "Gets the user's latest health numbers: sleep, HRV, resting heart rate, respiratory rate, steps and active energy."),
+        function("getWeekRecap", "Recaps the user's last seven days: their best and hardest day, what about their sleep or resting heart rate explains each, and one pattern across the week."),
         function("getTodayPlan", "Gets today's predicted energy curve, its peak and dip, bedtime, and the activities myTwin suggests fitting into the day, such as a workout, a nap or the last coffee."),
         function("addEvent", "Suggests adding an event today. The user must tap Confirm before it is saved.", [
             "title": ("STRING", "Short event title, for example Gym"),
@@ -188,6 +190,8 @@ final class GeminiChat {
             return await health.summaryText()
         case "getTodayPlan":
             return plan.summary()
+        case "getWeekRecap":
+            return plan.weekRecap()
         case "addEvent":
             return calendar.proposeAdd(title: title, hour: number("hour"), minute: number("minute"),
                                        durationMinutes: number("durationMinutes", default: 60))

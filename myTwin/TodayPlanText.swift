@@ -66,4 +66,6 @@ enum TodayPlanText {
 @MainActor
 final class TodayPlanSource {
     var summary: () -> String = { "No forecast for today yet." }
+    /// The last seven days as a few sentences; see WeekRecap.
+    var weekRecap: () -> String = { "Not enough nights of sleep data yet to recap the week." }
 }

@@ -553,6 +553,12 @@ final class HealthManager {
         return try? await descriptor.result(for: store)
     }
 
+    /// Steps from `start` until now. Nil when Health has no step samples in that window,
+    /// which is different from zero: nothing may have synced yet.
+    func steps(since start: Date) async -> Double? {
+        await sum(.stepCount, unit: .count(), from: start, to: .now)
+    }
+
     private func sum(_ id: HKQuantityTypeIdentifier, unit: HKUnit, from: Date, to: Date) async -> Double? {
         await statistics(id, options: .cumulativeSum, from: from, to: to)?.sumQuantity()?.doubleValue(for: unit)
     }
