@@ -85,6 +85,33 @@ struct InlineConversation: View {
     }
 }
 
+/// Something Dash brought up himself, with a way to take him up on it or not.
+struct NudgeCard: View {
+    let nudge: DashNudge
+    let more: () -> Void
+    let dismiss: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label(nudge.line, systemImage: "bubble.left.fill")
+                .font(.subheadline)
+                .labelStyle(.titleAndIcon)
+            HStack {
+                Button("Not now", action: dismiss)
+                    .buttonStyle(.bordered)
+                Button("Tell me more", action: more)
+                    .buttonStyle(.borderedProminent)
+                    .tint(BrandTitle.brand[1])
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        // It floats over the page, so it blurs what's behind rather than showing through.
+        .background(.regularMaterial, in: .rect(cornerRadius: 22))
+        .shadow(color: .black.opacity(0.3), radius: 16, y: 6)
+    }
+}
+
 #Preview("Listening") {
     InlineConversation(isListening: true, hint: "Listening… let go when you're done",
                        isThinking: false, change: nil, confirm: {}, cancel: {})

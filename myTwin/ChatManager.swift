@@ -66,8 +66,8 @@ final class ChatManager {
 
     /// Gemini answers when you've allowed it and you're online; otherwise, or if it can't be
     /// reached, the model on the iPhone does.
-    func send(_ text: String) async {
-        AskedQuestions.record(text)
+    func send(_ text: String, record: Bool = true) async {
+        if record { AskedQuestions.record(text) }
         messages.append(ChatMessage(isUser: true, text: text))
         calendar.pendingChange = nil  // a new message replaces any unconfirmed suggestion
         isResponding = true
