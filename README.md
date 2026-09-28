@@ -347,19 +347,22 @@ flowchart LR
 - **Predicts** whether today is better or worse than *your* normal, not an absolute score. Five sleep and resting-heart-rate features, relative to your recent baseline. A prediction needs today's sleep plus seven usable nights in the previous 14 days. Check-ins work immediately.
 - **Plans** by walking the gaps between real events in 15-minute steps.
 - **Talks** through Apple's on-device `SpeechAnalyzer` for transcription, Foundation Models or Gemini for answers, and tool calls that read your data, calendar, plan and week.
-- **Tested:** 35 unit tests (planner, rescue, week story, nudges, questions, daily support) and sample-day UI tests.
+- **Tested:** 44 unit tests (planner, rescue, week story, nudges, questions, demo mode, daily support) and UI tests for onboarding and the demo.
 
 ## Try it in 60 seconds
 
-No Apple Health or calendar data needed. Everything below uses a fictional day for "Alex".
+No Apple Health or calendar data needed. The guest demo gives "Alex" a full fictional life:
+a week of calendar, sleep and heart rate, steps and workouts, weight, and the questions they
+keep asking. Nothing of yours is read or written.
 
-1. Open **You → Try a sample day** (or the welcome screen's button). A banner marks it as fictional.
+1. On the first screen, tap **Continue as a guest**, then **Continue without Pro**.
 2. Watch Dash: he's **Tired** at 50%, and within a few seconds he speaks up about your last coffee.
-3. Tap **Low** on the check-in. The card steps aside and Dash grows.
-4. Swipe to **Predictions** to see the dip at 5 PM, then read *Your week*.
-5. Open **Plan → Rescue my day**, turn on **Choose the time**, preview and confirm. Then undo it from the dashboard.
-6. Tap **See all of Dash** to meet every state.
-7. Tap **Exit** to return to your own day.
+3. Swipe through the pages. The forecast and "You often ask" show their locks; tap one to see the upgrade screen.
+4. Flip the banner's switch to **Pro**. The forecast, suggestions and Rescue my day unlock on the spot.
+5. Tap **Low** on the check-in. The card steps aside and Dash grows.
+6. Open **Plan → Week** for the week ahead, then **Day → Rescue my day**, turn on **Choose the time**, preview and confirm.
+7. Tap the chat button and ask *"What do I have tomorrow?"*. Dash answers from the demo calendar (on an iPhone with Apple Intelligence).
+8. Tap **Use my account** to set up your own, with Apple Health and Calendar.
 
 ## Honest limits
 

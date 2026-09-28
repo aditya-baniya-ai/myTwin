@@ -53,6 +53,18 @@ final class HealthManager {
     var snapshot = HealthSnapshot()
     var errorMessage: String?
 
+    /// The guest demo: every read returns `DemoData`, and HealthKit is never touched.
+    let isDemo: Bool
+    private var demoWeights = DemoData.weights
+
+    init(demo: Bool = false) {
+        isDemo = demo
+        if demo {
+            isAuthorized = true
+            snapshot = DemoData.snapshot
+        }
+    }
+
     private let coreTypes: Set<HKObjectType> = [
         HKQuantityType(.heartRateVariabilitySDNN),
         HKQuantityType(.restingHeartRate),
@@ -83,6 +95,7 @@ final class HealthManager {
     }
 
     func requestAuthorization() async {
+        guard !isDemo else { return }
         guard HKHealthStore.isHealthDataAvailable() else {
             errorMessage = "Health data is not available on this device."
             return
@@ -101,6 +114,7 @@ final class HealthManager {
     /// HealthKit never reveals whether read access was granted, but it does say whether we have
     /// already asked. Without this the app would show "Connect Apple Health" again on every launch.
     func refreshAuthorizationState() async {
+        guard !isDemo else { return }
         guard HKHealthStore.isHealthDataAvailable() else { return }
         let core = try? await store.statusForAuthorizationRequest(toShare: [], read: coreTypes)
         guard core == .unnecessary else { return }      // never connected: wait for the button
@@ -116,6 +130,7 @@ final class HealthManager {
     /// so the twin is worked out before you open anything. Registered once at launch; iOS
     /// then launches the app in the background to run `arrived`.
     func watchForNewData(_ arrived: @escaping @Sendable () async -> Void) {
+        guard !isDemo else { return }
         let watched: [HKSampleType] = [HKCategoryType(.sleepAnalysis),
                                        HKQuantityType(.restingHeartRate),
                                        HKQuantityType(.bodyMass)]
@@ -133,6 +148,7 @@ final class HealthManager {
 
     /// Saves a weigh-in to Apple Health, asking to write weight the first time.
     func logWeight(pounds: Double, at date: Date = .now) async throws {
+        if isDemo { demoWeights.append(WeightSample(date: date, pounds: pounds)); return }
         let type = HKQuantityType(.bodyMass)
         if store.authorizationStatus(for: type) != .sharingAuthorized {
             try await store.requestAuthorization(toShare: [type], read: readTypes)
@@ -149,6 +165,7 @@ final class HealthManager {
     /// since HealthKit asks for all of them together the first time any one is needed.
     func logMeal(calories: Double, protein: Double? = nil, carbs: Double? = nil,
                 fat: Double? = nil, at date: Date = .now) async throws {
+        guard !isDemo else { return }
         let energyType = HKQuantityType(.dietaryEnergyConsumed)
         let toWrite: Set<HKSampleType> = [
             energyType, HKQuantityType(.dietaryProtein),
@@ -192,6 +209,7 @@ final class HealthManager {
     /// Workouts recorded today, so the plan can tell whether you actually trained rather
     /// than guessing from what's written in your calendar.
     func workoutsToday() async -> [DateInterval] {
+        if isDemo { return [] }             // the demo's walk is light: not training
         let start = Calendar.current.startOfDay(for: .now)
         let descriptor = HKSampleQueryDescriptor(
             predicates: [.workout(HKQuery.predicateForSamples(withStart: start, end: .now))],
@@ -203,6 +221,7 @@ final class HealthManager {
 
     /// Today's workouts with full details for the Activity detail tab.
     func workoutDetails() async -> [WorkoutDetail] {
+        if isDemo { return DemoData.workouts }
         let start = Calendar.current.startOfDay(for: .now)
         let descriptor = HKSampleQueryDescriptor(
             predicates: [.workout(HKQuery.predicateForSamples(withStart: start, end: .now))],
@@ -249,6 +268,7 @@ final class HealthManager {
 
     /// Count of today's mindful-session minutes.
     func mindfulMinutesToday() async -> Double? {
+        if isDemo { return snapshot.mindfulMinutes }
         let start = Calendar.current.startOfDay(for: .now)
         let predicate = HKQuery.predicateForSamples(withStart: start, end: .now)
         let descriptor = HKSampleQueryDescriptor(
@@ -261,6 +281,7 @@ final class HealthManager {
 
     /// Count of stand hours today (hours where stand time > 0).
     func standHoursToday() async -> Int? {
+        if isDemo { return snapshot.standHours }
         let cal = Calendar.current
         let start = cal.startOfDay(for: .now)
         let predicate = HKQuery.predicateForSamples(withStart: start, end: .now)
@@ -282,6 +303,7 @@ final class HealthManager {
 
     /// Weigh-ins from the last `days` days, oldest first, in pounds.
     func weights(days: Int = 90) async -> [WeightSample] {
+        if isDemo { return demoWeights }
         let start = Calendar.current.date(byAdding: .day, value: -days, to: .now) ?? .now
         let descriptor = HKSampleQueryDescriptor(
             predicates: [.quantitySample(type: HKQuantityType(.bodyMass),
@@ -311,6 +333,7 @@ final class HealthManager {
     }
 
     func refresh() async {
+        if isDemo { snapshot = DemoData.snapshot; return }
         let now = Date()
         let dayAgo = now.addingTimeInterval(-86_400)
         let startOfToday = Calendar.current.startOfDay(for: now)
@@ -368,6 +391,7 @@ final class HealthManager {
     /// How many of the last `days` days hold data for each signal. Answers the question
     /// "can this app work for me at all", which no amount of guessing can.
     func coverage(days: Int = 90) async -> [String: Int] {
+        if isDemo { return DemoData.coverage }
         let calendar = Calendar.current
         guard let start = calendar.date(byAdding: .day, value: -days, to: calendar.startOfDay(for: .now))
         else { return [:] }
@@ -422,6 +446,7 @@ final class HealthManager {
     /// night, and Garmin only syncs forward from the day you connect it, so a fixed
     /// two-week window often finds nothing at all.
     func history(minimumNights: Int = 7) async -> (days: [DaySignals], searchedDays: Int) {
+        if isDemo { return (SampleDay.history, 14) }
         let spans = [60, 180, 365]
         for span in spans {
             let days = await dailyHistory(days: span)
@@ -436,6 +461,7 @@ final class HealthManager {
     /// One entry per day, most recent first, holding the signals the energy model compares
     /// against your own baseline. Sleep is counted from 6pm the evening before to noon.
     func dailyHistory(days: Int) async -> [DaySignals] {
+        if isDemo { return Array(SampleDay.history.prefix(days)) }
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: .now)
         guard let spanStart = calendar.date(byAdding: .day, value: -(days + 1), to: today) else { return [] }
@@ -556,7 +582,8 @@ final class HealthManager {
     /// Steps from `start` until now. Nil when Health has no step samples in that window,
     /// which is different from zero: nothing may have synced yet.
     func steps(since start: Date) async -> Double? {
-        await sum(.stepCount, unit: .count(), from: start, to: .now)
+        if isDemo { return nil }            // no step history: the demo never nags about sitting
+        return await sum(.stepCount, unit: .count(), from: start, to: .now)
     }
 
     private func sum(_ id: HKQuantityTypeIdentifier, unit: HKUnit, from: Date, to: Date) async -> Double? {

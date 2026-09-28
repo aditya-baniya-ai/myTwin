@@ -109,7 +109,7 @@ final class DailySupport {
     init(isSample: Bool = false, defaults: UserDefaults = .standard) {
         self.isSample = isSample
         self.defaults = defaults
-        preferences = isSample ? PlanningPreferences() : PlanningPreferences.load(defaults: defaults)
+        preferences = isSample ? SampleDay.preferences : PlanningPreferences.load(defaults: defaults)
         if !isSample, let data = defaults.data(forKey: "daily.support.v1"),
            let saved = try? JSONDecoder().decode(Saved.self, from: data) {
             checkIn = saved.checkIn
@@ -249,6 +249,14 @@ enum SampleDay {
         Calendar.current.date(bySettingHour: hour, minute: minute, second: 0, of: .now) ?? .now
     }
     static var now: Date { at(14) }
+    /// The demo person's goals, so their rings have something to fill.
+    static var preferences: PlanningPreferences {
+        var value = PlanningPreferences()
+        value.stepGoal = 8_000
+        value.activeEnergyGoal = 500
+        value.weightGoal = 165
+        return value
+    }
     static var history: [DaySignals] {
         (0...14).map { day in
             DaySignals(date: Calendar.current.date(byAdding: .day, value: -day, to: at(0))!,

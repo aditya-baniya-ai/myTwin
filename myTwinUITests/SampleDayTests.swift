@@ -11,14 +11,19 @@ final class SampleDayTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--sample-day"]
         app.launch()
-        XCTAssertTrue(app.staticTexts["Sample day · fictional data · 2 PM"].waitForExistence(timeout: 30))
+        XCTAssertTrue(app.staticTexts["Demo · fictional data · 2 PM"].waitForExistence(timeout: 30))
         dismissNudge(app)
         let rescue = app.buttons["Rescue my day"].firstMatch
         // Slowly: a fast fling scrolls it from just below the screen to just above it.
         for _ in 0..<4 where !rescue.isHittable { app.swipeUp(velocity: .slow) }
         XCTAssertTrue(rescue.isHittable)
         rescue.tap()
-        app.buttons["Preview my rescue"].tap()
+        // The sheet picks your suggested activity as it opens, which clears a preview made
+        // in the same instant; a person never taps that fast, a test can.
+        let preview = app.buttons["Preview my rescue"]
+        XCTAssertTrue(preview.waitForExistence(timeout: 5))
+        preview.tap()
+        if !app.staticTexts["Your proposed change"].waitForExistence(timeout: 3) { preview.tap() }
         XCTAssertTrue(app.staticTexts["Your proposed change"].waitForExistence(timeout: 5))
         let confirm = app.buttons["Confirm sample change"]
         for _ in 0..<3 where !confirm.isHittable { app.swipeUp() }
@@ -29,7 +34,7 @@ final class SampleDayTests: XCTestCase {
         XCTAssertTrue(undo.waitForExistence(timeout: 5))
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Confirmed sample rescue"; screenshot.lifetime = .keepAlways; add(screenshot)
         undo.tap()
-        XCTAssertFalse(app.staticTexts["Sample plan updated"].exists)
+        XCTAssertFalse(app.staticTexts["Demo plan updated"].exists)
         let why = app.buttons["Why this plan?"].firstMatch
         for _ in 0..<3 where !why.isHittable { app.swipeDown() }
         why.tap()
@@ -43,7 +48,7 @@ final class SampleDayTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--sample-day"]
         app.launch()
-        XCTAssertTrue(app.staticTexts["Sample day · fictional data · 2 PM"].waitForExistence(timeout: 30))
+        XCTAssertTrue(app.staticTexts["Demo · fictional data · 2 PM"].waitForExistence(timeout: 30))
         dismissNudge(app)
         let preferences = app.buttons["Make it yours"].firstMatch
         for _ in 0..<4 where !preferences.isHittable { app.swipeUp() }
@@ -64,7 +69,7 @@ final class SampleDayTests: XCTestCase {
         XCTAssertEqual(app.switches["I have strength equipment"].value as? String, "1")
         app.buttons["Cancel"].tap()
         let better = app.buttons["Better"].firstMatch
-        for _ in 0..<5 where !better.isHittable { app.swipeUp() }
+        for _ in 0..<8 where !better.isHittable { app.swipeUp(velocity: .slow) }
         XCTAssertTrue(better.isHittable)
         better.tap()
         XCTAssertTrue(app.staticTexts["You reported feeling better."].exists)

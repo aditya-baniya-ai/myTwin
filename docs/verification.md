@@ -82,10 +82,11 @@ These are not covered by fictional sample-mode UI tests:
 
 ## Two-minute demo path
 
-Open **Try a sample day**, show the fictional-data label, then **Why this plan?**.
-Choose how you feel, open **Rescue my day**, preview the shorter activity, confirm and
-show **Undo change**. Open **Make it yours** to demonstrate preferences. Mark the
-sample walk **Better**. Exit sample mode to show the real connection and Pro screens.
+Choose **Continue as a guest → Continue with Pro**, show the demo label, then **Why this
+plan?**. Choose how you feel, open **Rescue my day**, preview the shorter activity, confirm
+and show **Undo change**. Open **Make it yours** to demonstrate preferences. Mark the walk
+**Better**. Flip the banner to **Free** to show the locks, then **Use my account** to show
+the real connection screens.
 
 ## Re-run
 

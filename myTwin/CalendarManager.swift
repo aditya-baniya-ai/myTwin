@@ -35,7 +35,23 @@ final class CalendarManager {
     var errorMessage: String?
     private(set) var revision = 0
 
+    /// The guest demo: a fictional week held in memory. Changes you confirm edit it, and
+    /// nothing is read from or saved to your calendar.
+    let isDemo: Bool
+    private var demoEvents: [EKEvent] = []
+
+    init(demo: Bool = false) {
+        isDemo = demo
+        if demo {
+            isAuthorized = true
+            demoEvents = DemoData.events(in: store)
+            loadTodayEvents()
+            loadWeekEvents()
+        }
+    }
+
     func requestAccess() async {
+        guard !isDemo else { return }
         do {
             isAuthorized = try await store.requestFullAccessToEvents()
             if isAuthorized {
@@ -49,12 +65,30 @@ final class CalendarManager {
     }
 
     func loadTodayEvents() {
-        isAuthorized = EKEventStore.authorizationStatus(for: .event) == .fullAccess
-        guard isAuthorized else { events = []; week = []; return }
         let start = Calendar.current.startOfDay(for: .now)
         let end = Calendar.current.date(byAdding: .day, value: 1, to: start)!
+        if isDemo { events = demoEvents(from: start, to: end); return }
+        isAuthorized = EKEventStore.authorizationStatus(for: .event) == .fullAccess
+        guard isAuthorized else { events = []; week = []; return }
         let predicate = store.predicateForEvents(withStart: start, end: end, calendars: nil)
         events = store.events(matching: predicate).sorted { $0.startDate < $1.startDate }
+    }
+
+    private func demoEvents(from start: Date, to end: Date) -> [EKEvent] {
+        demoEvents.filter { $0.startDate < end && $0.endDate > start }.sorted { $0.startDate < $1.startDate }
+    }
+
+    /// Saves to the calendar, or in the demo to the fictional week.
+    private func save(_ event: EKEvent) throws {
+        if isDemo {
+            if !demoEvents.contains(where: { $0 === event }) { demoEvents.append(event) }
+        } else {
+            try store.save(event, span: .thisEvent)  // for repeating events, only today's one changes
+        }
+    }
+
+    private func delete(_ event: EKEvent) throws {
+        if isDemo { demoEvents.removeAll { $0 === event } } else { try store.remove(event, span: .thisEvent) }
     }
 
     // MARK: - Chatbot tools
@@ -66,6 +100,7 @@ final class CalendarManager {
         let days = Calendar.current
         let start = days.startOfDay(for: .now)
         guard let end = days.date(byAdding: .day, value: 7, to: start) else { return }
+        if isDemo { week = demoEvents(from: start, to: end); return }
         let predicate = store.predicateForEvents(withStart: start, end: end, calendars: nil)
         week = store.events(matching: predicate).sorted { $0.startDate < $1.startDate }
     }
@@ -144,9 +179,9 @@ final class CalendarManager {
         event.title = title
         event.startDate = start
         event.endDate = end
-        event.calendar = store.defaultCalendarForNewEvents
+        if !isDemo { event.calendar = store.defaultCalendarForNewEvents }
         do {
-            try store.save(event, span: .thisEvent)
+            try save(event)
             didMutate()
         } catch {
             errorMessage = "Couldn't add \"\(title)\": \(error.localizedDescription)"
@@ -232,7 +267,7 @@ final class CalendarManager {
         do {
             if change.kind == .remove {
                 guard let event = change.event else { return "That event is no longer there." }
-                try store.remove(event, span: .thisEvent)
+                try delete(event)
                 didMutate()
                 return "Removed \"\(change.title)\" from your calendar."
             }
@@ -240,11 +275,11 @@ final class CalendarManager {
             let event = change.event ?? EKEvent(eventStore: store)
             if change.kind == .add {
                 event.title = change.title
-                event.calendar = store.defaultCalendarForNewEvents
+                if !isDemo { event.calendar = store.defaultCalendarForNewEvents }
             }
             event.startDate = change.start
             event.endDate = change.end
-            try store.save(event, span: .thisEvent)  // for repeating events, only today's one changes
+            try save(event)
             didMutate()
             return "Done. \"\(change.title)\" is on your calendar at \(timeRangeText(change.start, change.end))."
         } catch {

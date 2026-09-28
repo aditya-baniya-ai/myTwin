@@ -3,7 +3,10 @@ import EventKit
 import WidgetKit
 
 struct ContentView: View {
+    /// The guest demo: fictional health, calendar and questions, nothing of yours.
     let isSample: Bool
+    /// In the demo, whether it shows the Pro version. Never the real subscription.
+    @Binding var demoPro: Bool
     let leaveSample: () -> Void
     let enterSample: () -> Void
     @State private var daily: DailySupport
@@ -60,16 +63,18 @@ struct ContentView: View {
 
     private let energyModel = EnergyModel()
 
-    init(isSample: Bool = false, leaveSample: @escaping () -> Void = {}, enterSample: @escaping () -> Void = {}) {
+    init(isSample: Bool = false, demoPro: Binding<Bool> = .constant(false),
+         leaveSample: @escaping () -> Void = {}, enterSample: @escaping () -> Void = {}) {
         self.isSample = isSample
+        _demoPro = demoPro
         self.leaveSample = leaveSample
         self.enterSample = enterSample
         _daily = State(initialValue: DailySupport(isSample: isSample))
         _dismissed = State(initialValue: isSample ? [] : DismissedSuggestions.today())
         // The chat uses the same health and calendar data the home screen shows, and speaks
         // through the same voice that listens for "twin".
-        let health = HealthManager()
-        let calendar = CalendarManager()
+        let health = HealthManager(demo: isSample)
+        let calendar = CalendarManager(demo: isSample)
         let voice = VoiceManager()
         let gemini = GeminiAccess()
         _health = State(initialValue: health)
@@ -96,9 +101,7 @@ struct ContentView: View {
             Button("Dash's voice", systemImage: "waveform") {
                 showVoicePicker = true
             }
-            if !isSample {
-                Button("Ask myTwin", systemImage: "bubble.left.and.text.bubble.right") { showChat = true }
-            }
+            Button("Ask myTwin", systemImage: "bubble.left.and.text.bubble.right") { showChat = true }
         }
         .sheet(isPresented: $loggingWeight) {
             LogWeightSheet(last: weights.last?.pounds, goal: daily.preferences.weightGoal) { pounds in
@@ -114,8 +117,12 @@ struct ContentView: View {
         }
         .safeAreaInset(edge: .bottom) { bottomBar }
         .task {
-            if isSample { await updateEnergy(); return }
             await pro.start()
+            if isSample {                         // no permission prompts in the demo
+                await updateEnergy()
+                await listen()
+                return
+            }
             askGemini = gemini.needsAnswer
             await health.refreshAuthorizationState()
             calendar.loadTodayEvents()
@@ -132,13 +139,13 @@ struct ContentView: View {
                 try? await Task.sleep(for: .seconds(15 * 60))
             }
         }
-        .task { if !isSample { await pro.watchForChanges() } }
+        .task { await pro.watchForChanges() }
         // Both models read today's plan through this, and only the screen knows the
         // day's charge, bedtime and what has been dismissed.
         .onAppear {
             chat.rescueDay = { minutes in rescueMinutes = minutes; openRescue() }
             chat.planSource.summary = { [self] in
-                guard pro.isPro else { return "Adaptive plans and hour-by-hour forecasts require myTwin Pro. Rescue my day also requires an active myTwin Pro entitlement." }
+                guard hasPro else { return "Adaptive plans and hour-by-hour forecasts require myTwin Pro. Rescue my day also requires an active myTwin Pro entitlement." }
                 guard hasPrediction else { return "No measured forecast yet. The user can report how they feel and use Rescue my day to choose an activity." }
                 return TodayPlanText.summary(.init(dayStart: dayStart, bedtime: bedtimeDate,
                     events: currentEvents, dismissed: dismissed, trainedToday: trainedToday,
@@ -148,17 +155,19 @@ struct ContentView: View {
                 WeekRecap.text(history: signalHistory, model: energyModel)
             }
         }
-        .onChange(of: pro.isPro, initial: true) {
-            chat.proEnabled = pro.isPro
+        .onChange(of: hasPro, initial: true) {
+            chat.proEnabled = hasPro
             if !canRescue { showRescue = false }
         }
+        // Buying Pro from the demo's upgrade screen unlocks the demo too.
+        .onChange(of: pro.isPro) { if isSample && pro.isPro { demoPro = true } }
         .onChange(of: gemini.allowed) { if gemini.allowed != true { chat.endGemini() } }
         .sheet(isPresented: $showShowcase) { AvatarShowcase() }
         .sheet(isPresented: $showVoicePicker) {
-            VoicePicker(voice: voice, isPro: pro.isPro)
+            VoicePicker(voice: voice, isPro: hasPro)
         }
         .sheet(isPresented: $showPaywall, onDismiss: {
-            let resumeRescue = pendingRescue && pro.isPro
+            let resumeRescue = pendingRescue && hasPro
             pendingRescue = false
             if resumeRescue { showRescue = true }
         }) { ProPaywall(pro: pro) }
@@ -204,7 +213,11 @@ struct ContentView: View {
         // Don't hold the microphone while the app is in the background.
         .onChange(of: scenePhase) { _, phase in
             Task {
-                guard !isSample else { return }
+                if isSample {
+                    if phase == .active { await listen(); await considerNudge() }
+                    if phase == .background { chat.endGemini(); await voice.stopLiveVoice() }
+                    return
+                }
                 switch phase {
                 case .active:
                     now = .now
@@ -268,7 +281,7 @@ struct ContentView: View {
                     }
                 }
 
-                if health.isAuthorized && !isSample {
+                if health.isAuthorized {
                     tabLink("Activity", tab: .activity) {
                         ActivityGrid(steps: health.snapshot.steps,
                                      activeEnergy: health.snapshot.activeEnergyKcal,
@@ -350,7 +363,7 @@ struct ContentView: View {
                 .scaleEffect(listening ? 1.03 : 1)                    // he lifts while listening
                 .offset(y: listening ? -10 : 0)
                 .animation(.spring(response: 0.45, dampingFraction: 0.7), value: listening)
-                .onTapGesture { if isSample { openRescue() } else { talk() } }
+                .onTapGesture { talk() }
                 .accessibilityLabel(hasPrediction ? "Your twin, illustrative energy estimate. Tap to talk." : "Your twin is still learning. Tap to talk.")
                 .accessibilityHint(voice.isDictating ? "Tap again when you're done" : "Tap to start listening")
             chargeLabel
@@ -358,7 +371,7 @@ struct ContentView: View {
                 .padding(.horizontal, 20)
             Text(daily.currentCheckIn.map { "You said you feel \($0.title.lowercased()). Let's find what fits today." }
                  ?? DayGreeting.line(charge: charge, reading: energy, next: nextEvent,
-                                  dayStart: dayStart, healthConnected: health.isAuthorized || isSample,
+                                  dayStart: dayStart, now: planningNow, healthConnected: health.isAuthorized || isSample,
                                   userName: isSample ? "Alex" : UserProfile().firstName))
                 .font(.subheadline.weight(.medium))
                 .multilineTextAlignment(.center)
@@ -423,7 +436,7 @@ struct ContentView: View {
                 DashboardSection(title: "Your last 7 days") { WeekStrip(days: week).dashboardCard() }
             }
             weekRecap
-            if !isSample { oftenAsked }
+            oftenAsked
         }
     }
 
@@ -432,7 +445,7 @@ struct ContentView: View {
     /// Free shows the questions, and a tap explains they come with Pro.
     @ViewBuilder private var oftenAsked: some View {
         let _ = chat.messages.count                        // re-read after each answer
-        let asked = AskedQuestions.top()
+        let asked = isSample ? DemoData.questions : AskedQuestions.top()
         let items = asked.isEmpty
             ? AskedQuestions.starters.map { AskedQuestions.Asked(question: $0, count: 0, last: .now) }
             : asked
@@ -440,7 +453,7 @@ struct ContentView: View {
             VStack(spacing: 0) {
                 ForEach(items) { item in
                     Button {
-                        guard pro.isPro else { askedLocked = true; return }
+                        guard hasPro else { askedLocked = true; return }
                         tab = .twin
                         Task { await chat.send(item.question) }
                     } label: {
@@ -451,7 +464,7 @@ struct ContentView: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(item.question)
                                     .font(.subheadline)
-                                if pro.isPro, let answer = item.answer {
+                                if hasPro, let answer = item.answer {
                                     Text(answer)
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
@@ -460,7 +473,7 @@ struct ContentView: View {
                             }
                             .multilineTextAlignment(.leading)
                             Spacer(minLength: 0)
-                            if !pro.isPro {
+                            if !hasPro {
                                 Image(systemName: "lock.fill").font(.caption).foregroundStyle(.secondary)
                             }
                         }
@@ -483,12 +496,9 @@ struct ContentView: View {
 
     private var activityPage: some View {
         page("Today's activity", tab: .activity) {
-            if isSample {
-                Text("Sample day uses fictional sleep and calendar data. Your real activity and health records are not shown here.").dashboardCard()
-            } else {
-                activity
-            }
-            if !isSample && health.isAuthorized {
+            if isSample { sampleBanner }
+            activity
+            if health.isAuthorized {
                 ActivityDetail(snapshot: health.snapshot, workouts: workoutDetails)
             }
         }
@@ -506,9 +516,7 @@ struct ContentView: View {
             if canRescue {
                 Button("Rescue my day", systemImage: "wand.and.stars") { openRescue() }.buttonStyle(.borderedProminent)
             }
-            if planSpan == .day { plan } else if isSample {
-                Text("Sample mode shows one fictional day. Your real week is available after connecting Calendar.")
-            } else { weekPlan }
+            if planSpan == .day { plan } else { weekPlan }
         }
     }
 
@@ -532,9 +540,9 @@ struct ContentView: View {
         page("You", tab: .you) {
             if isSample { sampleBanner }
             Button("Make it yours", systemImage: "slider.horizontal.3") { showPreferences = true }.dashboardCard()
-            if !isSample { Button("Try a sample day", systemImage: "play.rectangle", action: enterSample).dashboardCard() }
+            if !isSample { Button("Try the demo", systemImage: "play.rectangle", action: enterSample).dashboardCard() }
+            voiceRow
             if !isSample {
-                voiceRow
                 proRow
 #if DEBUG
                 proResetRow
@@ -724,7 +732,7 @@ struct ContentView: View {
     /// The next thing on the calendar, which is usually what you want to know.
     private var nextEvent: (title: String, start: Date)? {
         calendar.events
-            .filter { !$0.isAllDay && $0.startDate > .now }
+            .filter { !$0.isAllDay && $0.startDate > planningNow }
             .min { $0.startDate < $1.startDate }
             .map { ($0.title ?? "Your next event", $0.startDate) }
     }
@@ -759,7 +767,7 @@ struct ContentView: View {
     /// Today's events with suggestions in the free time, or the button to connect the calendar.
     @ViewBuilder private var plan: some View {
         if calendar.isAuthorized || isSample {
-            SmartCalendar(allDay: isSample ? [] : calendar.events.filter(\.isAllDay).map { $0.title ?? "Untitled" },
+            SmartCalendar(allDay: calendar.events.filter(\.isAllDay).map { $0.title ?? "Untitled" },
                           items: planItems,
                           now: planningNow,
                           accept: acceptSuggestion,
@@ -886,9 +894,11 @@ struct ContentView: View {
     }
 
     private var planningNow: Date { isSample ? SampleDay.now : .now }
-    private var fullAccess: Bool { isSample || pro.isPro }
+    /// Pro as the screens see it: the demo's choice in the demo, the subscription otherwise.
+    private var hasPro: Bool { isSample ? demoPro : pro.isPro }
+    private var fullAccess: Bool { hasPro }
     private var hasPrediction: Bool { energy != nil }
-    private var canRescue: Bool { daily.canRescue(proEnabled: pro.isPro) }
+    private var canRescue: Bool { isSample ? demoPro : daily.canRescue(proEnabled: pro.isPro) }
     /// Reads `now` so the card comes back when the hour turns into a new part of the day.
     private var asksCheckIn: Bool { daily.asksForCheckIn(now: isSample ? SampleDay.now : max(now, .now)) }
     private var easyDay: Bool { daily.currentCheckIn.map { $0 == .low } ?? (energy?.band == .below) }
@@ -899,23 +909,32 @@ struct ContentView: View {
     }
     private var currentEvents: [PlanItem] {
         if !isSample { return DayPlanner.items(from: calendar.events) }
-        let fixed = [PlanItem(kind: .event, title: "Project meeting", start: SampleDay.at(14, minute: 30), end: SampleDay.at(15), color: .blue, eventID: "sample-meeting"),
-                     PlanItem(kind: .event, title: "Class", start: SampleDay.at(16), end: SampleDay.at(17), color: .purple, eventID: "sample-class")]
-        return fixed + daily.actions.filter { !$0.skipped }.map {
+        // The demo's calendar, plus the activities it has planned, which live in memory.
+        return (DayPlanner.items(from: calendar.events) + daily.actions.filter { !$0.skipped }.map {
             PlanItem(kind: .event, title: $0.title, start: $0.start, end: $0.end, color: .green,
                      movement: $0.movement, eventID: $0.eventID ?? $0.id.uuidString)
-        }
+        }).sorted { $0.start < $1.start }
     }
     private var plannedItems: [PlanItem] {
         DayPlanner.plan(events: currentEvents, dayStart: dayStart, now: planningNow, bedtime: bedtimeDate,
                         excluding: dismissed, trained: trainedToday, easyDay: easyDay, preferences: effectivePreferences)
     }
+    /// On every demo page: that it's fictional, which version it shows, and the way out.
     private var sampleBanner: some View {
-        HStack {
-            Label("Sample day · fictional data · 2 PM", systemImage: "play.rectangle.fill").font(.caption.bold())
-            Spacer()
-            Button("Exit", action: leaveSample)
-        }.padding(12).background(.orange.opacity(0.15), in: .rect(cornerRadius: 12))
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label("Demo · fictional data · 2 PM", systemImage: "play.rectangle.fill").font(.caption.bold())
+                Spacer()
+                Button("Use my account", action: leaveSample).font(.caption.weight(.semibold))
+            }
+            Picker("Demo version", selection: $demoPro) {
+                Text("Free").tag(false)
+                Text("Pro").tag(true)
+            }
+            .pickerStyle(.segmented)
+        }
+        .padding(12)
+        .background(.orange.opacity(0.15), in: .rect(cornerRadius: 12))
     }
     private var checkInCard: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -948,7 +967,7 @@ struct ContentView: View {
             }.font(.subheadline)
             if let action = undoAction {
                 VStack(alignment: .leading, spacing: 8) {
-                    Label(isSample ? "Sample plan updated" : "Calendar updated", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                    Label(isSample ? "Demo plan updated" : "Calendar updated", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
                     Text("\(action.title) · \(timeRangeText(action.start, action.end))").font(.subheadline)
                     Button("Undo change") { undoRescue(action) }
                 }.dashboardCard()
@@ -1010,7 +1029,6 @@ struct ContentView: View {
 
     /// Listens for "twin" from the moment the app opens. Answers appear under Dash.
     private func listen() async {
-        guard !isSample else { return }
         await voice.startLiveVoice { sentence in
             guard !chat.isResponding else { return }
             Task { await chat.send(sentence) }
@@ -1021,7 +1039,7 @@ struct ContentView: View {
         defer { if !isSample { shareMood() } }
         guard let energyModel else { return }
         if !isSample && !health.isAuthorized { energy = nil; signalHistory = []; await reschedule(); return }
-        let (history, searched) = isSample ? (SampleDay.history, 14) : await health.history()
+        let (history, searched) = await health.history()
         signalHistory = history
         searchedDays = searched
         nightsFound = energyModel.usableNights(in: history).count
@@ -1036,7 +1054,6 @@ struct ContentView: View {
         withAnimation(.easeOut(duration: 0.4)) {
             energy = energyModel.reading(from: history, diary: isSample ? nil : diary)
         }
-        if isSample { return }
         coverage = await health.coverage(days: 90)
         weights = await health.weights()
         trainedToday = await !health.workoutsToday().isEmpty
