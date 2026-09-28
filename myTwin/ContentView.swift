@@ -1019,6 +1019,9 @@ struct ContentView: View {
     }
     private func reschedule() async {
         guard !isSample else { return }
+        let preferences = daily.preferences
+        calendar.syncBedtime(on: preferences.addsBedtimeEvent,
+                             hour: preferences.bedtimeHour, minute: preferences.bedtimeMinute)
         await TwinRefresh.schedule(reading: energy, dayStart: dayStart,
             bedtime: (daily.preferences.bedtimeHour, daily.preferences.bedtimeMinute),
             calendar: calendar, trained: trainedToday, through: notifications)

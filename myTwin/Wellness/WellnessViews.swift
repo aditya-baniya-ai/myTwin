@@ -36,6 +36,7 @@ struct PlanningPreferencesView: View {
                     Toggle("Morning check-in", isOn: $preferences.morningReminder)
                     Toggle("Before calendar events", isOn: $preferences.eventReminders)
                     Toggle("Wind down before bed", isOn: $preferences.bedtimeReminder)
+                    Toggle("Bedtime in my calendar", isOn: $preferences.addsBedtimeEvent)
                     Picker("Quiet hours start", selection: $preferences.quietStart) { hours }
                     Picker("Quiet hours end", selection: $preferences.quietEnd) { hours }
                 } header: { Text("Reminders") } footer: {

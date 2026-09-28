@@ -3,7 +3,7 @@ import Foundation
 /// One short line on how to do well in the next thing on your calendar, from what kind of
 /// event it is and how much energy you'll likely have for it.
 enum EventTips {
-    enum Kind { case meeting, learning, training, social, other }
+    enum Kind { case meeting, learning, training, social, bedtime, other }
     enum Energy { case high, middle, low }
 
     /// `charge` is the forecast at the event's start (Pro); without it, how you said you
@@ -18,6 +18,7 @@ enum EventTips {
 
     static func kind(of title: String, isActivity: Bool = false) -> Kind {
         if isActivity { return .training }
+        if title.lowercased().contains("bedtime") { return .bedtime }
         let words = title.lowercased()
         func has(_ keys: [String]) -> Bool { keys.contains { words.contains($0) } }
         if has(["gym", "run", "yoga", "workout", "strength", "lift", "soccer", "swim", "cycl",
@@ -61,6 +62,8 @@ enum EventTips {
         case (.social, .middle): "Eat something beforehand so you're not running on empty."
         case (.social, .low): "Keep it short if you need to. Leaving early is fine on a low day."
         case (.social, nil): "Put your phone away and be fully there."
+
+        case (.bedtime, _): "Screens down and lights low half an hour before, so you fall asleep on time."
 
         case (.other, .high): "You're near your best: do the part that needs the most focus first."
         case (.other, .low): "Have water and a short walk beforehand, and keep it simple."

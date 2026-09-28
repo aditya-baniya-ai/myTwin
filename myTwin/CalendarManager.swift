@@ -257,6 +257,52 @@ final class CalendarManager {
         didMutate()
     }
 
+    // MARK: - Bedtime
+
+    private static let bedtimeKey = "calendar.bedtime.event"
+    private static let bedtimeURL = URL(string: "mytwin://bedtime")!
+
+    /// Keeps one repeating "Bedtime" event at your bedtime: added when it's missing, moved
+    /// when your bedtime changes, removed when you turn it off. Nothing in the demo.
+    func syncBedtime(on: Bool, hour: Int, minute: Int, defaults: UserDefaults = .standard) {
+        guard !isDemo, isAuthorized else { return }
+        let saved = defaults.string(forKey: Self.bedtimeKey)
+            .flatMap { store.calendarItem(withIdentifier: $0) as? EKEvent }
+            .flatMap { $0.url == Self.bedtimeURL ? $0 : nil }
+        guard on else {
+            if let saved { try? store.remove(saved, span: .futureEvents) }
+            defaults.removeObject(forKey: Self.bedtimeKey)
+            return
+        }
+        let days = Calendar.current
+        guard let start = days.date(bySettingHour: hour, minute: minute, second: 0,
+                                    of: days.startOfDay(for: .now)) else { return }
+        if let saved, days.component(.hour, from: saved.startDate) == hour,
+           days.component(.minute, from: saved.startDate) == minute { return }
+
+        let event = saved ?? EKEvent(eventStore: store)
+        if saved == nil {
+            guard let calendar = store.defaultCalendarForNewEvents, calendar.allowsContentModifications else { return }
+            event.calendar = calendar
+            event.title = "Bedtime"
+            event.notes = "Added by myTwin. Turn it off in myTwin → Make it yours."
+            event.url = Self.bedtimeURL
+        }
+        event.startDate = start
+        event.endDate = start.addingTimeInterval(15 * 60)
+        // After the dates: a rule added to an event without them is quietly dropped.
+        if !event.hasRecurrenceRules {
+            event.addRecurrenceRule(EKRecurrenceRule(recurrenceWith: .daily, interval: 1, end: nil))
+        }
+        do {
+            try store.save(event, span: .futureEvents)
+            defaults.set(event.calendarItemIdentifier, forKey: Self.bedtimeKey)
+            didMutate()
+        } catch {
+            errorMessage = "Couldn't add Bedtime to your calendar: \(error.localizedDescription)"
+        }
+    }
+
     // MARK: - Confirming changes
 
     /// Saves the pending change to the calendar. Returns a message for the chat.

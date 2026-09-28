@@ -38,6 +38,14 @@ struct PlanningPreferences: Codable, Equatable {
     var bedtimeReminder = false
     var quietStart = 21
     var quietEnd = 8
+    /// Kept optional so settings saved before these existed still load; nil means on.
+    var bedtimeEvent: Bool? = nil
+
+    /// A repeating "Bedtime" event in your calendar at your bedtime.
+    var addsBedtimeEvent: Bool {
+        get { bedtimeEvent ?? true }
+        set { bedtimeEvent = newValue }
+    }
 
     var activityTitle: String {
         movement == .strength && !hasEquipment ? "Bodyweight strength" : movement.title
