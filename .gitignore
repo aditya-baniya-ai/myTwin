@@ -18,3 +18,6 @@ Config/Secrets.xcconfig
 
 # Blender's auto-backup of the previous save
 *.blend1
+
+# Local settings of other tools
+.serena/
