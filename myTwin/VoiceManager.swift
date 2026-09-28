@@ -29,9 +29,6 @@ final class VoiceManager {
     private let pauseBeforeSending: TimeInterval = 5.0
     /// Back to sleep after this much quiet, so it stops reacting to the room.
     private let sleepAfterIdle: TimeInterval = 30
-    /// While you are talking to it on purpose, this much silence ends the turn, so the
-    /// microphone never stays open on a forgotten tap.
-    private let quietEndsDictation: TimeInterval = 8
     /// How long the app's own voice keeps echoing after it stops talking.
     private let echoTail: Duration = .milliseconds(800)
 
@@ -48,9 +45,12 @@ final class VoiceManager {
     private(set) var isInterrupted = false
     /// The microphone is really running, not just meant to be.
     private(set) var isHearing = false
-
-    /// How to finish.
-    let listeningHint = "Listening… tap Dash again when you're done"
+    /// How loud the microphone is right now, 0 to 1, for the recording bar.
+    private(set) var inputLevel: Float = 0
+    /// When the current tap-to-talk began, for the recording bar's timer.
+    private(set) var dictationStarted: Date?
+    /// You tapped to send and the recogniser is still catching up with what you said.
+    private(set) var isFinishing = false
 
     /// One line of plain status, shown on both the home screen and the chat.
     var statusNote: String? {
@@ -59,8 +59,8 @@ final class VoiceManager {
         case .preparing: "Preparing on-device speech… You can type in chat while it loads."
         case _ where isInterrupted: "Your microphone is busy with a call."
         case .listening where !isHearing: nil            // starting up: not worth saying
-        case .listening: isDictating ? listeningHint
-                       : isAwake ? "Listening…"
+        case .listening where isDictating: nil          // the recording bar says it
+        case .listening: isAwake ? "Listening…"
                                  : "Tap Dash to talk, or say \"twin\"."
         case .unavailable(let reason): reason
         }
@@ -113,6 +113,8 @@ final class VoiceManager {
     // spoken for: without this the recogniser re-delivers them and the app hears you twice.
     private var sentUpTo = CMTime.zero
     private var latestResultEnd = CMTime.zero
+    /// How much audio has gone to the recogniser, on its own clock.
+    private var audioFed = 0.0
 
     // MARK: - Starting and stopping
 
@@ -127,6 +129,7 @@ final class VoiceManager {
         pieces = []
         sentUpTo = .zero
         latestResultEnd = .zero
+        audioFed = 0
 
         do {
             guard await requestPermissions() else {
@@ -172,6 +175,8 @@ final class VoiceManager {
         isLive = false
         isAwake = false
         isDictating = false
+        isFinishing = false
+        dictationStarted = nil
         onSentence = nil
         stopSpeaking()
 
@@ -207,6 +212,7 @@ final class VoiceManager {
         stopSpeaking()                  // tapping Dash while he talks means you want the floor
         isDictating = true
         isAwake = true
+        dictationStarted = .now
         recentSpeech = []
         pieces = []
         transcript = ""
@@ -215,24 +221,34 @@ final class VoiceManager {
     }
 
     /// Ends the dictation and sends what you said, once the recogniser has caught up.
+    ///
+    /// The recogniser runs seconds behind your voice and reports in bursts, so at the tap
+    /// most of the sentence can still be on its way. Waiting for the words to stop changing
+    /// sent "so" and dropped "how's my day today?" that followed a second later. Instead,
+    /// the recogniser is told to finish everything up to the tap, and the sentence goes
+    /// once it has, or after four seconds at most.
     func finishDictation() {
-        guard isDictating else { return }
+        guard isDictating, !isFinishing else { return }
+        isFinishing = true
+        let tap = CMTime(seconds: audioFed, preferredTimescale: 1000)
+        let analyzer = analyzer
+        var finalized = false
+        Task {
+            try? await analyzer?.finalize(through: tap)
+            finalized = true
+        }
         Task { [weak self] in
-            // The recogniser runs a word or two behind your voice, and the last words often
-            // arrive after the tap. Wait until what it has heard stops changing — or a
-            // second and a half, whichever comes first. Cutting at a fixed moment is what
-            // sent half-finished sentences.
-            let deadline = Date.now.addingTimeInterval(1.5)
-            var settled = self?.transcript ?? ""
-            while Date.now < deadline {
-                try? await Task.sleep(for: .milliseconds(250))
-                guard let self, isDictating else { return }
-                if transcript == settled { break }
-                settled = transcript
+            let deadline = Date.now.addingTimeInterval(4)
+            while let self, isDictating, !finalized, latestResultEnd < tap, Date.now < deadline {
+                try? await Task.sleep(for: .milliseconds(100))
             }
-            guard let self, isDictating else { return }
+            try? await Task.sleep(for: .milliseconds(150))   // its last results are still arriving
+            guard let self else { return }
+            isFinishing = false
+            guard isDictating else { return }
             isDictating = false
             isAwake = false
+            dictationStarted = nil
             let sentence = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
             sentUpTo = latestResultEnd
             transcript = ""
@@ -240,6 +256,19 @@ final class VoiceManager {
             lastHeard = .now
             if !sentence.isEmpty { onSentence?(withoutWakePhrase(sentence)) }
         }
+    }
+
+    /// Ends the dictation and throws away what was said.
+    func cancelDictation() {
+        guard isDictating else { return }
+        isDictating = false
+        isFinishing = false
+        isAwake = false
+        dictationStarted = nil
+        sentUpTo = latestResultEnd
+        transcript = ""
+        pieces = []
+        lastHeard = .now
     }
 
     // MARK: - Speaking
@@ -438,13 +467,19 @@ final class VoiceManager {
         }
 
         let continuation = inputStream
-        input.installTap(onBus: 0, bufferSize: 4096, format: micFormat) { buffer, _ in
+        input.installTap(onBus: 0, bufferSize: 4096, format: micFormat) { [weak self] buffer, _ in
             // Runs on the audio thread. The recogniser needs its own format: feeding it the
             // microphone's format transcribes nothing at all, with no error.
+            let level = loudness(of: buffer)
             guard let converted = convertBuffer(buffer, with: converter, to: analyzerFormat) else {
                 return
             }
             continuation?.yield(AnalyzerInput(buffer: converted))
+            let seconds = Double(converted.frameLength) / analyzerFormat.sampleRate
+            Task { @MainActor in
+                self?.inputLevel = level
+                self?.audioFed += seconds
+            }
         }
         engine.prepare()
         try engine.start()
@@ -464,6 +499,8 @@ final class VoiceManager {
                 case .began:
                     isInterrupted = true
                     isDictating = false          // whatever you were saying is lost with the microphone
+                    isFinishing = false
+                    dictationStarted = nil
                     isAwake = false
                 case .ended:
                     isInterrupted = false        // the engine watchdog starts the microphone again
@@ -602,11 +639,9 @@ final class VoiceManager {
 
                 guard isAwake else { continue }
 
-                if isDictating {
-                    // You end it with a second tap; otherwise a short silence does.
-                    if !isSpeakingNow, quietFor > quietEndsDictation { finishDictation() }
-                    continue
-                }
+                // Tap to talk only ever ends with your tap: the recogniser reports seconds
+                // late and in bursts, so "no new words for a while" happened mid-sentence.
+                if isDictating { continue }
 
                 if sentence.isEmpty {
                     if !isSpeakingNow, quietFor > sleepAfterIdle { isAwake = false }
@@ -667,6 +702,15 @@ nonisolated func convertBuffer(_ buffer: AVAudioPCMBuffer,
     }
     guard error == nil, output.frameLength > 0 else { return nil }
     return output
+}
+
+/// A buffer's loudness on a 0-1 scale: -50 dB and below is silence, -10 dB is loud speech.
+nonisolated func loudness(of buffer: AVAudioPCMBuffer) -> Float {
+    guard let samples = buffer.floatChannelData?[0], buffer.frameLength > 0 else { return 0 }
+    var sum: Float = 0
+    for index in 0..<Int(buffer.frameLength) { sum += samples[index] * samples[index] }
+    let decibels = 10 * log10(max(sum / Float(buffer.frameLength), 1e-10))
+    return min(max((decibels + 50) / 40, 0), 1)
 }
 
 /// Finds "twin" (also "my twin", "hey twin") and returns whatever was said after it, ""

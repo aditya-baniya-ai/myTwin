@@ -18,12 +18,80 @@ struct ListeningGlow: View {
     }
 }
 
-/// Under Dash while you talk to him: that he is listening, that he is thinking, and any
-/// calendar change waiting for a Confirm. His answer is spoken aloud and written down in
-/// the chat, never printed over the dashboard.
+/// While you talk to Dash: how long you've been talking, dots that rise with your voice so
+/// you can see he's hearing you, and buttons to throw it away or send it.
+struct DictationBar: View {
+    let level: Float
+    let since: Date
+    var isSending = false
+    let cancel: () -> Void
+    let send: () -> Void
+
+    private static let dotCount = 24
+    @State private var levels = [Float](repeating: 0, count: dotCount)
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Button("Discard", systemImage: "trash", action: cancel)
+                .labelStyle(.iconOnly)
+                .font(.title3)
+                .foregroundStyle(.primary)
+
+            TimelineView(.periodic(from: since, by: 1)) { context in
+                Text(Duration.seconds(max(0, context.date.timeIntervalSince(since).rounded(.down))),
+                     format: .time(pattern: .minuteSecond))
+                    .font(.body.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+
+            // Newest on the right. A gentle wave keeps flowing through the dots the whole time
+            // he's listening, even while you pause; your voice lifts them tall and white.
+            TimelineView(.animation(minimumInterval: 1 / 30)) { context in
+                let time = context.date.timeIntervalSinceReferenceDate
+                HStack(spacing: 4) {
+                    ForEach(levels.indices, id: \.self) { index in
+                        let wave = 0.1 + 0.07 * sin(time * 6 - Double(index) * 0.55)
+                        let height = max(Double(levels[index]), wave)
+                        Capsule()
+                            .fill(levels[index] > 0.15 ? Color.primary : Color.secondary.opacity(0.6))
+                            .frame(width: 5, height: 5 + height * 22)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            .frame(height: 28)
+            .accessibilityHidden(true)
+
+            Button(action: send) {
+                if isSending {
+                    ProgressView().tint(.white)
+                } else {
+                    Image(systemName: "arrow.up").font(.title3.weight(.semibold))
+                }
+            }
+            .foregroundStyle(.white)
+            .frame(width: 44, height: 44)
+            .background(Color.blue, in: .circle)
+            .disabled(isSending)
+            .accessibilityLabel(isSending ? "Sending" : "Send")
+        }
+        .padding(.leading, 18)
+        .padding(.trailing, 6)
+        .padding(.vertical, 6)
+        .background(.regularMaterial, in: .capsule)
+        .overlay(Capsule().strokeBorder(.white.opacity(0.1)))
+        .onChange(of: level) { _, now in
+            levels = Array((levels + [now]).suffix(Self.dotCount))
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Dash is listening")
+    }
+}
+
+/// Under Dash while he works on your question: that he is thinking, and any calendar
+/// change waiting for a Confirm. His answer is spoken aloud and written down in the chat,
+/// never printed over the dashboard.
 struct InlineConversation: View {
-    let isListening: Bool
-    let hint: String                 // how to finish: let go, or tap again
     let isThinking: Bool
     let change: CalendarChange?
     let confirm: () -> Void
@@ -31,29 +99,10 @@ struct InlineConversation: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            if isListening {
-                listening
-            } else if isThinking {
-                thinking
-            }
+            if isThinking { thinking }
             if let change { confirmCard(change) }
         }
         .frame(maxWidth: .infinity)
-        .animation(.snappy, value: isListening)
-    }
-
-    private var listening: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "mic.fill")
-                .foregroundStyle(.red)
-                .symbolEffect(.pulse)
-            Text(hint)
-                .font(.subheadline)
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(Color(.secondarySystemGroupedBackground).opacity(0.8), in: .capsule)
     }
 
     private var thinking: some View {
@@ -113,13 +162,11 @@ struct NudgeCard: View {
 }
 
 #Preview("Listening") {
-    InlineConversation(isListening: true, hint: "Listening… let go when you're done",
-                       isThinking: false, change: nil, confirm: {}, cancel: {})
+    DictationBar(level: 0.6, since: .now.addingTimeInterval(-2), cancel: {}, send: {})
         .padding()
 }
 
 #Preview("Thinking") {
-    InlineConversation(isListening: false, hint: "", isThinking: true,
-                       change: nil, confirm: {}, cancel: {})
+    InlineConversation(isThinking: true, change: nil, confirm: {}, cancel: {})
         .padding()
 }

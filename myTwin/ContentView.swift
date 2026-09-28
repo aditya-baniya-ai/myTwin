@@ -848,9 +848,14 @@ struct ContentView: View {
 
     @ViewBuilder private var bottomBar: some View {
         VStack(spacing: 10) {
-            if voice.isDictating || chat.isResponding || calendar.pendingChange != nil {
-                InlineConversation(isListening: voice.isDictating, hint: voice.listeningHint,
-                                   isThinking: chat.isResponding, change: calendar.pendingChange,
+            if voice.isDictating {
+                DictationBar(level: voice.inputLevel, since: voice.dictationStarted ?? .now,
+                             isSending: voice.isFinishing,
+                             cancel: voice.cancelDictation, send: voice.finishDictation)
+                    .padding(.horizontal, 16)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else if chat.isResponding || calendar.pendingChange != nil {
+                InlineConversation(isThinking: chat.isResponding, change: calendar.pendingChange,
                                    confirm: chat.confirmChange, cancel: chat.cancelChange)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             } else if let nudge {
