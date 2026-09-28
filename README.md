@@ -61,7 +61,7 @@ In Xcode, choose an **iPhone Simulator** (for example *iPhone 17 Pro*) at the to
 
 **3. Inside the demo:** every page has an orange **Demo** banner. Flip its **Free / Pro**
 switch to compare the two versions live, and tap **Use my account** to leave. Then follow the
-[60-second tour](#try-it-in-60-seconds).
+[2-minute tour](#try-it-in-2-minutes).
 
 <details>
 <summary><b>What works where</b></summary>
@@ -100,7 +100,7 @@ The app is signed to the author's free Apple account, so change these to your ow
 - [Features](#features)
 - [Free and Pro, powered by RevenueCat](#free-and-pro-powered-by-revenuecat)
 - [How it works](#how-it-works)
-- [Try it in 60 seconds](#try-it-in-60-seconds)
+- [Try it in 2 minutes](#try-it-in-2-minutes)
 - [Honest limits](#honest-limits)
 - [Building it](#building-it)
 
@@ -399,13 +399,71 @@ shortcuts. New users see three starter questions.
   <img src="assets/screenshots/demo_pro_questions.jpg" width="220" alt="Questions with answers, Pro"/>
 </p>
 
-### 13. Works while the app is closed
+### 13. Will you hit your step goal? A walk if not
 
-- A **HealthKit background observer** wakes myTwin when your watch syncs, recomputes, and refreshes everything.
+Every couple of hours in the day, myTwin checks whether today's steps will reach your goal. There's
+no black-box model: it adds the steps you have so far to what you *usually* walk from this hour
+until bed (your typical day over the last three weeks of Apple Health, skipping days the watch sat
+on the charger). If you're heading short, a **5 or 10-minute walk** goes into the next free slot
+on your calendar, and a notification tells you why:
+
+> *"You're at 3,200 of 8,000 steps. At your usual pace you'll end near 6,400. A 10-minute walk at
+> 2:35 PM is on your calendar."*
+
+It checks at most every two hours, adds three walks a day at most, only one waiting at a time, and
+never at night. The Activity page shows whether you're on pace. Free for everyone.
+
+- 💼 A desk day turns into a few short breaks without you having to plan them.
+- 🏃 Close the gap on a rest day without a full session.
+- 🙂 A nudge that's grounded in *your* habits, not a generic "10,000 steps".
+
+<p align="center">
+  <img src="assets/screenshots/steps.jpg" width="260" alt="Behind your step goal"/>
+  &nbsp;&nbsp;➜&nbsp;&nbsp;
+  <img src="assets/screenshots/plan_walk.jpg" width="260" alt="The walk on the calendar"/>
+</p>
+
+### 14. Plan tomorrow tonight
+
+A **Tomorrow** tab, and a **Plan tomorrow** card on Dash's page from 5 PM. Write tomorrow's goals
+in a text box, personal or work, one per line, and they don't have to match your calendar. myTwin
+reads a length (*"2 hrs"*), a time (*"at 7pm"*) or a part of the day (*"morning"*) from each line,
+and whether it's work or personal.
+
+- **Every evening:** *"Did you finish today's goals?"* Tick them off, and **move what's left to
+  tomorrow** with one tap. For everyone.
+- **Plan my day tomorrow** <sup>PRO</sup>: goals with a time keep it, work goes into your strongest
+  hours, personal goals later in the day, all around your existing events. Each becomes a calendar
+  event with a reminder 10 minutes before, and a morning notification lists the day. Free users
+  can write and check off goals; the button opens the upgrade screen.
+
+- 💼 End the workday by writing tomorrow's top three, and wake up to them already scheduled.
+- 🏃 Put training on the list and let it land in your best hour.
+- 🙂 Nothing slips: what you didn't finish rolls over instead of being forgotten.
+
+<table>
+<tr>
+<td align="center" width="33%"><img src="assets/screenshots/home_card.jpg" width="220" alt="Plan tomorrow card"/><br/><sub>From 5 PM on Dash's page</sub></td>
+<td align="center" width="33%"><img src="assets/screenshots/goals_check.jpg" width="220" alt="Did you finish today's goals?"/><br/><sub>Tick off today, move the rest</sub></td>
+<td align="center" width="33%"><img src="assets/screenshots/goals_planned.jpg" width="220" alt="Goals planned into tomorrow"/><br/><sub>Planned into tomorrow (Pro)</sub></td>
+</tr>
+</table>
+
+### 15. Bedtime on your calendar
+
+A daily **Bedtime** event sits in your calendar at the bedtime you chose, so your plan, your
+reminders and everyone who shares your calendar can see it. Change your bedtime and it moves;
+switch off **Bedtime in my calendar** in *Make it yours* and it's gone.
+
+<p align="center"><img src="assets/screenshots/bedtime.jpg" width="260" alt="Bedtime in the plan"/></p>
+
+### 16. Works while the app is closed
+
+- A **HealthKit background observer** wakes myTwin when your watch syncs sleep, heart rate or steps, recomputes, and refreshes everything, including the step check.
 - A **Home Screen widget** (small and medium) shows today's estimate and one piece of advice.
-- **Notifications:** a morning briefing, a heads-up 10 minutes before each event, and a bedtime nudge.
+- **Notifications:** a morning briefing, a heads-up 10 minutes before each event, a bedtime nudge, step-goal walks, and your goals morning and night.
 
-### 14. Your data, your connections
+### 17. Your data, your connections
 
 The **You** page holds everything personal: preferences, Dash's voice, your plan, and clear
 switches for Apple Health, Calendar and Gemini, each explaining exactly what it's used for.
@@ -427,6 +485,9 @@ Health data stays on your iPhone. Google only receives questions if you turn Gem
 | Smart suggestions in your free time | 🔒 | ✅ |
 | **Rescue my day** | 🔒 | ✅ |
 | Answers on the "You often ask" card | 🔒 | ✅ |
+| Step-goal check and walks on your calendar | ✅ | ✅ |
+| Write tomorrow's goals, nightly check, carry over | ✅ | ✅ |
+| **Plan my day tomorrow**: goals as calendar events and reminders | 🔒 | ✅ |
 | Gemini answers and natural Gemini voices | 🔒 | ✅ |
 
 Plans: **Monthly $9.99**, **Yearly $79.99**, **Lifetime $99.99**, all configured in the
@@ -465,9 +526,9 @@ flowchart LR
 - **Predicts** whether today is better or worse than *your* normal, not an absolute score. Five sleep and resting-heart-rate features, relative to your recent baseline. A prediction needs today's sleep plus seven usable nights in the previous 14 days. Check-ins work immediately.
 - **Plans** by walking the gaps between real events in 15-minute steps.
 - **Talks** through Apple's on-device `SpeechAnalyzer` for transcription, Foundation Models or Gemini for answers, and tool calls that read your data, calendar, plan and week.
-- **Tested:** 44 unit tests (planner, rescue, week story, nudges, questions, demo mode, daily support) and UI tests for onboarding and the demo.
+- **Tested:** 67 unit tests (planner, rescue, week story, nudges, questions, demo mode, step pace, goals, bedtime, daily support) and 6 UI tests for onboarding, the demo and tomorrow's goals.
 
-## Try it in 60 seconds
+## Try it in 2 minutes
 
 To get the app running, see [For hackathon judges](#-for-hackathon-judges-open-the-demo-in-2-minutes).
 No Apple Health or calendar data needed. The guest demo gives "Alex" a full fictional life:
@@ -480,8 +541,10 @@ keep asking. Nothing of yours is read or written.
 4. Flip the banner's switch to **Pro**. The forecast, suggestions and Rescue my day unlock on the spot.
 5. Tap **Low** on the check-in. The card steps aside and Dash grows.
 6. Open **Plan → Week** for the week ahead, then **Day → Rescue my day**, turn on **Choose the time**, preview and confirm.
-7. Tap the chat button and ask *"What do I have tomorrow?"*. Dash answers from the demo calendar (on an iPhone with Apple Intelligence).
-8. Tap **Use my account** to set up your own, with Apple Health and Calendar.
+7. Open **Activity**: Alex is behind on steps, so a 5-minute walk is already on the calendar.
+8. Open **Tomorrow**: tick off today's goals, **move the rest to tomorrow**, then **Plan my day tomorrow**.
+9. Tap the chat button and ask *"What do I have tomorrow?"*. Dash answers from the demo calendar (on an iPhone with Apple Intelligence).
+10. Tap **Use my account** to set up your own, with Apple Health and Calendar.
 
 ## Honest limits
 
@@ -539,7 +602,7 @@ Use any installed simulator. See [`docs/verification.md`](docs/verification.md) 
 |---|---|
 | `myTwin/` | The app: five pages (Dash, Predictions, Activity, Plan, You) |
 | `myTwin/Avatar/` | RealityKit Dash: loading, animation, lighting, showcase |
-| `myTwin/Wellness/` | Check-ins, Rescue my day, feedback, preferences |
+| `myTwin/Wellness/` | Check-ins, Rescue my day, feedback, preferences, step check, tomorrow's goals |
 | `myTwin/Dashboard/` | Cards, smart calendar, forecast chart |
 | `myTwin/Gemini/` | Gemini Live client and consent flow |
 | `myTwin/Pro/` | RevenueCat subscription wrapper and paywall |
