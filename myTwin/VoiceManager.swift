@@ -118,9 +118,11 @@ final class VoiceManager {
 
     // MARK: - Starting and stopping
 
-    /// Starts listening. Nothing is sent until you say the wake phrase.
+    /// Starts listening. Nothing is sent until you say the wake phrase. Already listening,
+    /// it hands what you say to the new `onSentence` instead: there is one microphone, and
+    /// the screen in front of you gets it.
     func startLiveVoice(onSentence: @escaping (String) -> Void) async {
-        guard !isLive else { return }
+        guard !isLive else { self.onSentence = onSentence; return }
         isLive = true
         isAwake = false
         self.onSentence = onSentence
@@ -462,6 +464,9 @@ final class VoiceManager {
         try? input.setVoiceProcessingEnabled(true)
 
         let micFormat = input.outputFormat(forBus: 0)
+        // A microphone that isn't ready reports an empty format, and tapping it aborts the
+        // app rather than throwing.
+        guard micFormat.sampleRate > 0, micFormat.channelCount > 0 else { throw VoiceError.noAudioFormat }
         guard let converter = AVAudioConverter(from: micFormat, to: analyzerFormat) else {
             throw VoiceError.noAudioFormat
         }

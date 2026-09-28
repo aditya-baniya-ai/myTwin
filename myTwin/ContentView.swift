@@ -63,7 +63,9 @@ struct ContentView: View {
 
     private let energyModel = EnergyModel()
 
-    init(isSample: Bool = false, demoPro: Binding<Bool> = .constant(false),
+    /// `voice` is shared by the whole app: the demo and your own screen take turns with the
+    /// one microphone. Two at once crashed as the second tapped a microphone already in use.
+    init(isSample: Bool = false, demoPro: Binding<Bool> = .constant(false), voice: VoiceManager? = nil,
          leaveSample: @escaping () -> Void = {}, enterSample: @escaping () -> Void = {}) {
         self.isSample = isSample
         _demoPro = demoPro
@@ -73,9 +75,9 @@ struct ContentView: View {
         _dismissed = State(initialValue: isSample ? [] : DismissedSuggestions.today())
         // The chat uses the same health and calendar data the home screen shows, and speaks
         // through the same voice that listens for "twin".
+        let voice = voice ?? VoiceManager()
         let health = HealthManager(demo: isSample)
         let calendar = CalendarManager(demo: isSample)
-        let voice = VoiceManager()
         let gemini = GeminiAccess()
         _health = State(initialValue: health)
         _calendar = State(initialValue: calendar)

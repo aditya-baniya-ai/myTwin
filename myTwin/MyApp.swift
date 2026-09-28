@@ -4,6 +4,8 @@ import SwiftUI
     /// Registered here rather than on a screen: iOS launches the app in the background when
     /// your watch syncs, and no screen exists then.
     @State private var health = HealthManager()
+    /// The one microphone and voice, shared by the demo and your own screen.
+    @State private var voice = VoiceManager()
     @State private var profile = UserProfile()
     @State private var onboarded: Bool = UserProfile().isComplete
     /// The guest demo, with Pro (`true`) or without. Nil when you're not in it.
@@ -28,7 +30,7 @@ import SwiftUI
                 if let pro = demo {
                     ContentView(isSample: true,
                                 demoPro: Binding(get: { demo ?? pro }, set: { demo = $0 }),
-                                leaveSample: leaveDemo)
+                                voice: voice, leaveSample: leaveDemo)
                         .id("demo")
                 } else if onboarded {
                     if choosingDemo {
@@ -36,7 +38,7 @@ import SwiftUI
                             .background { WelcomeBackground() }
                             .preferredColorScheme(.dark)
                     } else {
-                        ContentView(enterSample: { choosingDemo = true }).id("personal")
+                        ContentView(voice: voice, enterSample: { choosingDemo = true }).id("personal")
                             .task {
                                 health.watchForNewData { await TwinRefresh.run() }
                             }
