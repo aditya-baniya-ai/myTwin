@@ -31,15 +31,16 @@ struct Goal: Codable, Identifiable, Equatable {
 enum GoalParser {
     private static let work = ["work", "meeting", "email", "report", "study", "research", "paper", "project",
                                "code", "review", "class", "exam", "assignment", "client", "interview",
-                               "apply", "presentation", "lab", "thesis", "write", "finish", "submit", "prepare"]
+                               "apply", "application", "grant", "presentation", "lab", "thesis", "write",
+                               "finish", "submit", "prepare", "poster", "lecture"]
 
     static func parse(_ text: String) -> [Goal] {
         text.split(whereSeparator: \.isNewline).compactMap { line(String($0)) }
     }
 
     static func line(_ raw: String) -> Goal? {
-        var text = raw.trimmingCharacters(in: .whitespaces)
-        text = text.replacing(/^[-•*\d.)\s]+/, with: "")               // bullets and numbering
+        var text = normalize(raw).trimmingCharacters(in: .whitespaces)
+        text = text.replacing(/^\s*(?:[-•*]+|\d+[.)])\s*/, with: "")     // bullets and numbering
         guard !text.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
         let lower = text.lowercased()
 
@@ -71,16 +72,60 @@ enum GoalParser {
 
         let window: Goal.Window? = lower.contains("morning") ? .morning
             : lower.contains("afternoon") ? .afternoon
-            : lower.contains("evening") || lower.contains("tonight") ? .evening : nil
-        text = text.replacing(/(?i)\b(in the |this |tomorrow )?(morning|afternoon|evening|tonight)\b/, with: "")
+            : ["evening", "tonight", "before bed", "at night"].contains(where: lower.contains) ? .evening : nil
+        text = text.replacing(/(?i)\b(in the |this |tomorrow )?(morning|afternoon|evening|tonight|before bed|at night)\b/, with: "")
 
         let kind: Goal.Kind = work.contains { lower.contains($0) } ? .professional : .personal
-        let title = text.replacing(/[,;·\-]+\s*$/, with: "").replacing(/\s{2,}/, with: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
+        let title = tidy(text)
         guard !title.isEmpty else { return nil }
         return Goal(title: title.prefix(1).uppercased() + title.dropFirst(),
                     minutes: min(max(minutes ?? (kind == .professional ? 60 : 30), 5), 8 * 60),
                     kind: kind, window: window, hour: hour, minute: minute)
+    }
+
+    // MARK: - Spoken words
+
+    private static let numbers: [String: Double] = [
+        "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8,
+        "nine": 9, "ten": 10, "eleven": 11, "twelve": 12, "fifteen": 15, "twenty": 20,
+        "twenty five": 25, "twenty-five": 25, "thirty": 30, "forty": 40, "forty five": 45,
+        "forty-five": 45, "fifty": 50, "sixty": 60, "ninety": 90,
+    ]
+    private static let spokenLength = try! Regex(
+        "(?i)\\b(twenty[- ]five|forty[- ]five|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|thirty|forty|fifty|sixty|ninety)( and a half)? (hours?|hrs?|minutes?|mins?)\\b")
+
+    /// Speech as dictation writes it, in the forms the rest of the parser reads: "7 p.m."
+    /// to "7pm", "two hours" to "2 hours", "half an hour" to "30 min", "noon" to "12pm".
+    static func normalize(_ text: String) -> String {
+        var out = text.replacing(/(?i)\b([ap])\.\s?m\b\.?/) { "\($0.1.lowercased())m" }
+        out = out.replacing(/(?i)\bnoon\b/, with: "12pm")
+        out = out.replacing(/(?i)\ban hour and a half\b/, with: "1.5 hrs")
+        out = out.replacing(/(?i)\bhalf an hour\b/, with: "30 min")
+        out = out.replacing(/(?i)\b(?:an|a|one) hour\b/, with: "1 hr")
+        out = out.replacing(spokenLength) { match in
+            let word = match.output[1].substring.map { String($0).lowercased() } ?? ""
+            let half = match.output[2].substring == nil ? 0 : 0.5
+            let unit = match.output[3].substring.map(String.init) ?? ""
+            let value = (numbers[word] ?? 0) + half
+            return "\(value.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(value)) : String(value)) \(unit)"
+        }
+        return out
+    }
+
+    /// A goal's name without the words around it that speech brings: "I need to", "then",
+    /// "maybe" in front, "for", "about", "that'll take" left over at the end.
+    static func tidy(_ text: String) -> String {
+        var out = text.replacing(/\s{2,}/, with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        let lead = /(?i)^(?:um+|uh+|so|okay|ok|well|and|then|also|maybe|just|first|finally|next|tomorrow|(?:just )?one (?:more )?thing|i (?:need|want|have|would like|'d like|’d like|'ll need|’ll need) to|i(?:'ll|’ll| will| should| must| gotta)|gotta)\b[\s,.:]*/
+        let tail = /(?i)[\s,;:.·\-]*\b(?:for|about|around|roughly|take|takes|that'll|that’ll|that will|it'll|it’ll|it will|that|will|by|at|in|the|to|and|then|maybe|or so)\s*$/
+        let edges = CharacterSet.whitespacesAndNewlines.union(.punctuationCharacters)
+        while let match = out.firstMatch(of: lead), !match.output.isEmpty { out.removeSubrange(match.range) }
+        out = out.trimmingCharacters(in: edges)
+        while let match = out.firstMatch(of: tail) {
+            out.removeSubrange(match.range)
+            out = out.trimmingCharacters(in: edges)
+        }
+        return out
     }
 
     /// The same text without the matched part: the range was found in a lowercased copy of

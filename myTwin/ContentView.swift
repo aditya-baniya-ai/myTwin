@@ -123,6 +123,9 @@ struct ContentView: View {
             ChatView(chat: chat, voice: voice)
         }
         .safeAreaInset(edge: .bottom) { bottomBar }
+        // The keyboard covers the tab bar instead of pushing it up. Removing the bar while
+        // typing re-laid out every page mid-animation and could leave the app never settling.
+        .ignoresSafeArea(.keyboard, edges: .bottom)
         .task {
             await pro.start()
             if isSample {                         // no permission prompts in the demo
@@ -538,7 +541,7 @@ struct ContentView: View {
     private var tomorrowPage: some View {
         page("Tomorrow", tab: .tomorrow) {
             if isSample { sampleBanner }
-            TomorrowView(book: goals, calendar: calendar, preferences: daily.preferences,
+            TomorrowView(book: goals, calendar: calendar, voice: voice, preferences: daily.preferences,
                          isPro: hasPro, now: planningNow, upgrade: { showPaywall = true })
         }
     }

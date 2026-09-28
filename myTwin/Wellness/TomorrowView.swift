@@ -6,6 +6,7 @@ import SwiftUI
 struct TomorrowView: View {
     let book: GoalBook
     let calendar: CalendarManager
+    let voice: VoiceManager
     let preferences: PlanningPreferences
     let isPro: Bool
     let now: Date
@@ -14,6 +15,8 @@ struct TomorrowView: View {
     @State private var text = ""
     @State private var result: String?
     @State private var askedForNotifications = false
+    /// Turning what you said into goal lines.
+    @State private var hearing = false
     @FocusState private var writing: Bool
 
     private var tomorrow: Date { Calendar.current.date(byAdding: .day, value: 1, to: now) ?? now }
@@ -99,6 +102,7 @@ struct TomorrowView: View {
                     .accessibilityLabel("Goals for tomorrow")
             }
             .dashboardCard(padding: 12)
+            speakButton
             Text("Add a length (\"2 hrs\"), a time (\"at 3pm\") or a part of the day (\"morning\") if you like. It can differ from your calendar.")
                 .font(.caption).foregroundStyle(.secondary)
         }
@@ -106,6 +110,35 @@ struct TomorrowView: View {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
                 Button("Done") { writing = false }
+            }
+        }
+    }
+
+    /// Say your goals instead of typing them: the same recording bar as talking to Dash,
+    /// and what you said lands in the box, one goal per line.
+    @ViewBuilder private var speakButton: some View {
+        if hearing {
+            Label("Writing down your goals…", systemImage: "ellipsis").font(.subheadline).foregroundStyle(.secondary)
+        } else if voice.isDictating {
+            Label("Listening. Tap send in the bar below when you're done.", systemImage: "mic.fill")
+                .font(.subheadline).foregroundStyle(.red)
+        } else {
+            Button("Say your goals", systemImage: "mic.fill") {
+                writing = false
+                voice.startDictation { said in
+                    hearing = true
+                    Task {
+                        let lines = await GoalSpeech.lines(from: said)
+                        let kept = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                        text = ([kept] + lines).filter { !$0.isEmpty }.joined(separator: "\n")
+                        hearing = false
+                    }
+                }
+            }
+            .buttonStyle(.bordered)
+            .disabled(voice.status != .listening)
+            if voice.status != .listening {
+                Text("The microphone isn't ready. You can type instead.").font(.caption).foregroundStyle(.secondary)
             }
         }
     }

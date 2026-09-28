@@ -15,7 +15,7 @@ tomorrow's goals. **myTwin Pro** is sold through RevenueCat.
 |---|---|
 | Commits | 68 on `main`, all pushed to [github.com/aditya-baniya-ai/myTwin](https://github.com/aditya-baniya-ai/myTwin) |
 | Code | about 10,000 lines of Swift in the app and widget, 1,000 lines of tests |
-| Tests | 67 unit tests and 6 UI tests; the last two full runs passed completely |
+| Tests | 71 unit tests and 6 UI tests; the last two full runs passed completely |
 | On the phone | The latest build is installed on the iPhone 15 Pro (free Apple account: it expires around **3 October**) |
 | Repository | Public, MIT licence, README written for the judges with screenshots and animations |
 
@@ -71,7 +71,9 @@ tomorrow's goals. **myTwin Pro** is sold through RevenueCat.
   plus your usual steps from this hour on, the median of the last three weeks). If you'll fall
   short, a 5 or 10-minute walk goes into the next free slot on your calendar with a
   notification. At most every 2 hours, 3 walks a day, one waiting at a time, never at night.
-- **Tomorrow's goals:** one goal per line; the app reads a length ("2 hrs"), a time ("at 7pm")
+- **Tomorrow's goals:** type them, or tap **Say your goals** and speak (Apple's on-device model
+  splits the sentence into goals, copying your words; lines with words you didn't say are
+  dropped). One goal per line; the app reads a length ("2 hrs"), a time ("at 7pm")
   or a part of the day ("morning"), and whether it's work or personal. Everyone gets the
   nightly "Did you finish today's goals?" and carry-over. **Plan my day tomorrow (Pro)** puts
   goals into tomorrow's free time (fixed times first, work in your strongest hours, personal
@@ -152,8 +154,8 @@ The test runner sometimes hangs after finishing, which is a known Xcode issue, n
   After the last phone test the result was reported as "Something else" with no detail.
 - **See all of Dash:** the gesture buttons didn't visibly animate on the Simulator, while the
   home-screen Dash animates fine. Not yet checked on the phone.
-- **Reading goals** uses text rules. Clear lines work; number words ("two hours") and "p.m."
-  are not read yet, and loose sentences may not split well.
+- **Speaking your goals** only works on the phone (the Simulator has no speech recognition),
+  and the on-device model's split hasn't been tried on the phone yet, only on the Mac.
 - **Suggestions feel sparse on busy days:** a gentle stretch counts as the day's workout, and
   after 5 PM there's only "Prepare for tomorrow".
 - **Paywall links:** Terms and Privacy on the RevenueCat dashboard paywall point to example.com.
@@ -174,12 +176,8 @@ The test runner sometimes hangs after finishing, which is a known Xcode issue, n
 6. **Submit** with the repo link, the video and the RevenueCat project details.
 
 ### Small, useful improvements (hours, not days)
-- **Speak your goals (in progress):** a mic on the goals box using Dash's recording bar, with
-  Apple's on-device model splitting speech into goals. Tested on the Mac: the split is
-  reliable, but one wording dropped details ("two hours in the morning") and a stricter one
-  invented goals once. Next: use the first wording, teach the parser number words and "p.m.",
-  and add a fallback that splits on sentences.
-- **Hide the tab bar while typing:** it currently rides up above the keyboard.
+- **Done since:** Say your goals (mic on the goals box), and the keyboard now covers the tab bar
+  instead of pushing it up.
 - **Suggestions:** count stretches and walks as light movement, and add evening options (a
   short walk after dinner, wind-down).
 - **Delete the unused T-pose images** in `assets/Dash/readme_frames/`.

@@ -51,6 +51,9 @@ final class VoiceManager {
     private(set) var dictationStarted: Date?
     /// You tapped to send and the recogniser is still catching up with what you said.
     private(set) var isFinishing = false
+    /// Where this dictation goes instead of the chat, such as the goals box. Cleared when
+    /// the dictation ends.
+    private var dictationTarget: ((String) -> Void)?
 
     /// One line of plain status, shown on both the home screen and the chat.
     var statusNote: String? {
@@ -179,6 +182,7 @@ final class VoiceManager {
         isDictating = false
         isFinishing = false
         dictationStarted = nil
+        dictationTarget = nil
         onSentence = nil
         stopSpeaking()
 
@@ -208,10 +212,18 @@ final class VoiceManager {
 
     // MARK: - Tap to talk
 
+    /// A dictation whose words go to `target` rather than to Dash.
+    func startDictation(into target: @escaping (String) -> Void) {
+        guard status == .listening else { return }
+        startDictation()
+        dictationTarget = target
+    }
+
     /// Starts a dictation that you end yourself, so no pause is ever taken for the end.
     func startDictation() {
         guard status == .listening else { return }
         stopSpeaking()                  // tapping Dash while he talks means you want the floor
+        dictationTarget = nil
         isDictating = true
         isAwake = true
         dictationStarted = .now
@@ -256,13 +268,16 @@ final class VoiceManager {
             transcript = ""
             pieces = []
             lastHeard = .now
-            if !sentence.isEmpty { onSentence?(withoutWakePhrase(sentence)) }
+            let target = dictationTarget ?? onSentence
+            dictationTarget = nil
+            if !sentence.isEmpty { target?(withoutWakePhrase(sentence)) }
         }
     }
 
     /// Ends the dictation and throws away what was said.
     func cancelDictation() {
         guard isDictating else { return }
+        dictationTarget = nil
         isDictating = false
         isFinishing = false
         isAwake = false
@@ -504,6 +519,7 @@ final class VoiceManager {
                 case .began:
                     isInterrupted = true
                     isDictating = false          // whatever you were saying is lost with the microphone
+                    dictationTarget = nil
                     isFinishing = false
                     dictationStarted = nil
                     isAwake = false

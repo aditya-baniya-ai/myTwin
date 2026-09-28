@@ -428,7 +428,10 @@ never at night. The Activity page shows whether you're on pace. Free for everyon
 A **Tomorrow** tab, and a **Plan tomorrow** card on Dash's page from 5 PM. Write tomorrow's goals
 in a text box, personal or work, one per line, and they don't have to match your calendar. myTwin
 reads a length (*"2 hrs"*), a time (*"at 7pm"*) or a part of the day (*"morning"*) from each line,
-and whether it's work or personal.
+and whether it's work or personal. Or tap **Say your goals** and just talk: *"finish the lit review,
+about two hours in the morning, then call mom at 7 p.m. and go to the gym for 45 minutes"* becomes
+three lines in the box. Apple's on-device model splits what you said, copying your own words, and
+the app keeps only lines made of words you actually said.
 
 - **Every evening:** *"Did you finish today's goals?"* Tick them off, and **move what's left to
   tomorrow** with one tap. For everyone.
@@ -526,7 +529,7 @@ flowchart LR
 - **Predicts** whether today is better or worse than *your* normal, not an absolute score. Five sleep and resting-heart-rate features, relative to your recent baseline. A prediction needs today's sleep plus seven usable nights in the previous 14 days. Check-ins work immediately.
 - **Plans** by walking the gaps between real events in 15-minute steps.
 - **Talks** through Apple's on-device `SpeechAnalyzer` for transcription, Foundation Models or Gemini for answers, and tool calls that read your data, calendar, plan and week.
-- **Tested:** 67 unit tests (planner, rescue, week story, nudges, questions, demo mode, step pace, goals, bedtime, daily support) and 6 UI tests for onboarding, the demo and tomorrow's goals.
+- **Tested:** 71 unit tests (planner, rescue, week story, nudges, questions, demo mode, step pace, goals, bedtime, daily support) and 6 UI tests for onboarding, the demo and tomorrow's goals.
 
 ## Try it in 2 minutes
 
