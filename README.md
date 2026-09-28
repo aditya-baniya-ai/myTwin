@@ -36,8 +36,64 @@ you when your last coffee still clears before bed. When the day falls apart, one
   <img src="assets/screenshots/rescue_confirm.jpg" width="200" alt="Rescue my day"/>
 </p>
 
+## 🏆 For hackathon judges: open the demo in 2 minutes
+
+You don't need a watch, Apple Health data or any accounts. The app has a **guest demo** with a
+full fictional user, in both the free and Pro versions.
+
+**1. Run the app** (Mac with Xcode 26):
+
+```bash
+git clone https://github.com/aditya-baniya-ai/myTwin.git
+open myTwin/myTwin.xcodeproj
+```
+
+In Xcode, choose an **iPhone Simulator** (for example *iPhone 17 Pro*) at the top and press
+**Run** (⌘R). No keys or signing are needed for the Simulator.
+
+**2. Open the demo:**
+
+| Where you are | What to tap |
+|---|---|
+| First launch | **Continue as a guest** → **Continue with Pro** (everything unlocked) or **Continue without Pro** (the free version) |
+| Already set up | **You** tab → **Try the demo** → pick Pro or free |
+| Skip the menus | In Xcode: **Product → Scheme → Edit Scheme → Run → Arguments**, add `--sample-day` (Pro) or `--demo-free` (free), then Run |
+
+**3. Inside the demo:** every page has an orange **Demo** banner. Flip its **Free / Pro**
+switch to compare the two versions live, and tap **Use my account** to leave. Then follow the
+[60-second tour](#try-it-in-60-seconds).
+
+<details>
+<summary><b>What works where</b></summary>
+
+| | Simulator | iPhone |
+|---|:---:|:---:|
+| Dash in 3D, all four energy states and gestures | ✅ | ✅ |
+| Demo calendar, forecast, plan, Rescue my day, Up next | ✅ | ✅ |
+| Free vs Pro switch, paywall (RevenueCat Test Store, no real money) | ✅ | ✅ |
+| Talking to Dash by voice | ❌ no speech recognition | ✅ |
+| Chat answers on the device | ❌ | ✅ with Apple Intelligence |
+
+</details>
+
+<details>
+<summary><b>Running it on your own iPhone</b></summary>
+
+The app is signed to the author's free Apple account, so change these to your own first:
+
+1. Select the **myTwin** and **myTwinWidgetExtension** targets → **Signing & Capabilities** →
+   choose your **Team**, and give each a new **Bundle Identifier**
+   (e.g. `com.yourname.myTwin` and `com.yourname.myTwin.widget`).
+2. Change the **App Group** on both targets to `group.com.yourname.myTwin`, and the same string
+   in `Shared/TwinState.swift` (`appGroup`).
+3. Plug in your iPhone, pick it at the top of Xcode, and press **Run**. The first time, allow the
+   developer on the phone under **Settings → General → VPN & Device Management**.
+
+</details>
+
 ## Contents
 
+- [For hackathon judges](#-for-hackathon-judges-open-the-demo-in-2-minutes)
 - [Who it's for](#who-its-for)
 - [Try it as a guest](#try-it-as-a-guest)
 - [Meet Dash](#meet-dash)
@@ -413,6 +469,7 @@ flowchart LR
 
 ## Try it in 60 seconds
 
+To get the app running, see [For hackathon judges](#-for-hackathon-judges-open-the-demo-in-2-minutes).
 No Apple Health or calendar data needed. The guest demo gives "Alex" a full fictional life:
 a week of calendar, sleep and heart rate, steps and workouts, weight, and the questions they
 keep asking. Nothing of yours is read or written.
