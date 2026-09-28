@@ -269,17 +269,26 @@ can be **undone** from the dashboard.
   <img src="assets/screenshots/plan_after_rescue.jpg" width="250" alt="Plan after rescue"/>
 </p>
 
-### 8. Did that help? Feedback that learns
+### 8. Did that help? Then, what's next
 
-After an activity, myTwin asks one question: did you feel **better**, the **same** or
-**worse**? Or did you skip it? Repeated answers adjust what it suggests next: if walks keep
-leaving you worse and stretching keeps helping, it suggests stretching. Small samples are
-labelled as small samples. The **Undo** card sits right there too.
+The moment an activity you took from Dash's suggestions **ends**, myTwin asks one question:
+did you feel **better**, the **same** or **worse**? Or did you skip it? Answer, and the card
+steps aside for **Up next**: your next event, when it starts, and one line on how to do well
+in it, based on what kind of event it is and how much energy you'll have for it.
 
-- 🏃 Find out what actually recovers *you*.
-- 🙂 Feedback stays on your iPhone.
+Repeated answers also shape what Dash suggests: if walks keep leaving you worse and
+stretching keeps helping, he suggests stretching. Small samples are labelled as small
+samples, and feedback stays on your iPhone.
 
-<p align="center"><img src="assets/screenshots/feedback.jpg" width="280" alt="Undo and feedback"/></p>
+- 💼 Walk into the 2:30 meeting knowing you'll be at 50%, and what to do about it.
+- 🏃 Find out what actually recovers *you*, and get a cue before the next session.
+- 🙂 One tap to answer, and the next thing is already there.
+
+<p align="center">
+  <img src="assets/screenshots/feedback_question.jpg" width="280" alt="Did that help?"/>
+  &nbsp;&nbsp;➜&nbsp;&nbsp;
+  <img src="assets/screenshots/feedback_up_next.jpg" width="280" alt="Up next, with a tip"/>
+</p>
 
 ### 9. Make it yours
 

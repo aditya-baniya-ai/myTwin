@@ -81,7 +81,7 @@ struct EnergyExplanationView: View {
     var body: some View {
         NavigationStack {
             List {
-                if isSample { Text("Sample data · not your health records").foregroundStyle(.orange) }
+                if isSample { Text("Demo data · not your health records").foregroundStyle(.orange) }
                 Section("What was measured") {
                     LabeledContent("Last night's sleep", value: sleepText(history.first?.asleepMinutes))
                     LabeledContent("Recent usual sleep", value: sleepText(averageSleep))
@@ -146,7 +146,7 @@ struct RescueDayView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    Label(daily.isSample ? "Sample day · no real calendar changes" : "A smaller plan still counts", systemImage: "leaf.fill")
+                    Label(daily.isSample ? "Demo · no real calendar changes" : "A smaller plan still counts", systemImage: "leaf.fill")
                         .foregroundStyle(.green).font(.headline)
                     Text("Choose what feels manageable. Dash will find a free gap and show you the change before saving it.")
                     VStack(alignment: .leading, spacing: 14) {
@@ -186,7 +186,7 @@ struct RescueDayView: View {
                             Text(proposal.reason).font(.subheadline)
                             Text("Fixed appointments stay where they are. Only myTwin activities shown above can change.")
                                 .font(.caption).foregroundStyle(.secondary)
-                            Button(saving ? "Saving…" : (daily.isSample ? "Confirm sample change" : "Confirm calendar change")) { confirm(proposal) }
+                            Button(saving ? "Saving…" : (daily.isSample ? "Confirm demo change" : "Confirm calendar change")) { confirm(proposal) }
                                 .buttonStyle(.borderedProminent).disabled(saving || !allowed())
                         }.dashboardCard()
                         .transition(.opacity.combined(with: .move(edge: .bottom)))
@@ -255,35 +255,84 @@ struct RescueDayView: View {
     }
 }
 
+/// "Did that help?" once an activity you took up has ended, one card for each you haven't
+/// answered. An answer puts the card away; with nothing left to ask, it shows what's next.
 struct ActionFeedbackView: View {
     let daily: DailySupport
     let now: Date
-    private var recent: [PlannedAction] {
-        daily.actions.filter { $0.tracksOutcome != false && $0.start <= now && $0.end > now.addingTimeInterval(-2 * 86400) }
-            .sorted { $0.start > $1.start }
+    /// The next thing on the calendar and a line on how to do well in it.
+    var upNext: (item: PlanItem, tip: String)?
+
+    /// Finished, unanswered, and from the last two days.
+    private var waiting: [PlannedAction] {
+        daily.actions.filter {
+            $0.tracksOutcome != false && $0.outcome == nil && !$0.skipped
+                && $0.end <= now && $0.end > now.addingTimeInterval(-2 * 86400)
+        }
+        .sorted { $0.end > $1.end }
     }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Did that help?").font(.title3.bold())
-            if recent.isEmpty { Text("After an activity you've accepted, check in here. Your feedback stays on this device.").foregroundStyle(.secondary) }
-            ForEach(recent) { action in
-                VStack(alignment: .leading, spacing: 10) {
-                    Label(action.title, systemImage: action.movement.symbol).font(.headline)
-                    if action.skipped { Text("Skipped — no problem. Another day, another plan.").font(.subheadline) }
-                    else if let outcome = action.outcome {
-                        Text("You reported feeling \(outcome.title.lowercased()).").font(.subheadline)
-                    } else {
+            if !waiting.isEmpty {
+                Text("Did that help?").font(.title3.bold())
+                ForEach(waiting) { action in
+                    VStack(alignment: .leading, spacing: 10) {
+                        Label(action.title, systemImage: action.movement.symbol).font(.headline)
                         Text("Did you do this activity? If so, how do you feel now?").font(.subheadline)
                         HStack {
                             ForEach(ActionOutcome.allCases) { outcome in
-                                Button(outcome.title) { daily.finish(action, outcome: outcome) }.buttonStyle(.bordered)
+                                Button(outcome.title) { answer(action, outcome) }.buttonStyle(.bordered)
                             }
                         }
-                        Button("I skipped it") { daily.finish(action, outcome: nil, skipped: true) }.font(.caption)
+                        Button("I skipped it") { answer(action, nil) }.font(.caption)
+                        if let evidence = daily.evidence(for: action.movement) {
+                            Text(evidence).font(.caption).foregroundStyle(.secondary)
+                        }
                     }
-                    if let evidence = daily.evidence(for: action.movement) { Text(evidence).font(.caption).foregroundStyle(.secondary) }
-                }.dashboardCard()
+                    .dashboardCard()
+                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                }
+            } else if let upNext {
+                Text("Up next").font(.title3.bold())
+                UpNextCard(item: upNext.item, tip: upNext.tip, now: now)
+                    .transition(.opacity)
             }
         }
+        .animation(.snappy, value: waiting.map(\.id))
+    }
+
+    private func answer(_ action: PlannedAction, _ outcome: ActionOutcome?) {
+        daily.finish(action, outcome: outcome, skipped: outcome == nil)
+    }
+}
+
+struct UpNextCard: View {
+    let item: PlanItem
+    let tip: String
+    let now: Date
+
+    private var when: String {
+        let minutes = Int(item.start.timeIntervalSince(now) / 60)
+        let lead = minutes < 60 ? "In \(max(minutes, 1)) min" : "At \(item.start.formatted(date: .omitted, time: .shortened))"
+        return "\(lead) · \(timeRangeText(item.start, item.end))"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Capsule().fill(item.color).frame(width: 4, height: 34)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.title).font(.headline)
+                    Text(when).font(.subheadline).foregroundStyle(.secondary)
+                }
+            }
+            Label(tip, systemImage: "lightbulb.fill")
+                .font(.subheadline)
+                .symbolRenderingMode(.multicolor)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .dashboardCard()
+        .accessibilityElement(children: .combine)
     }
 }

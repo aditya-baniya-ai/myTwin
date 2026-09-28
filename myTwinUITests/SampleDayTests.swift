@@ -7,6 +7,16 @@ final class SampleDayTests: XCTestCase {
         let notNow = app.buttons["Not now"]
         if notNow.waitForExistence(timeout: 8) { notNow.tap() }
     }
+    /// Scrolls a short, fixed distance towards `element` until it can be tapped. A swipe
+    /// flings too far and can carry a small card right past the screen.
+    @MainActor private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
+        let window = app.windows.firstMatch
+        let middle = window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        for _ in 0..<12 where !element.isHittable {
+            let above = element.exists && element.frame.minY < window.frame.midY
+            middle.press(forDuration: 0.05, thenDragTo: middle.withOffset(CGVector(dx: 0, dy: above ? 220 : -220)))
+        }
+    }
     @MainActor func testSampleRescuePreviewConfirmUndoAndExplanation() {
         let app = XCUIApplication()
         app.launchArguments = ["--sample-day"]
@@ -25,7 +35,7 @@ final class SampleDayTests: XCTestCase {
         preview.tap()
         if !app.staticTexts["Your proposed change"].waitForExistence(timeout: 3) { preview.tap() }
         XCTAssertTrue(app.staticTexts["Your proposed change"].waitForExistence(timeout: 5))
-        let confirm = app.buttons["Confirm sample change"]
+        let confirm = app.buttons["Confirm demo change"]
         for _ in 0..<3 where !confirm.isHittable { app.swipeUp() }
         XCTAssertTrue(confirm.exists)
         confirm.tap()
@@ -69,10 +79,12 @@ final class SampleDayTests: XCTestCase {
         XCTAssertEqual(app.switches["I have strength equipment"].value as? String, "1")
         app.buttons["Cancel"].tap()
         let better = app.buttons["Better"].firstMatch
-        for _ in 0..<8 where !better.isHittable { app.swipeUp(velocity: .slow) }
+        reveal(better, in: app)
         XCTAssertTrue(better.isHittable)
         better.tap()
-        XCTAssertTrue(app.staticTexts["You reported feeling better."].exists)
+        // Answered: the question goes, and the next event takes its place with a tip.
+        XCTAssertTrue(app.staticTexts["Up next"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Did that help?"].exists)
         XCTAssertFalse(app.buttons["Share my moment"].exists, "sharing was removed")
     }
 

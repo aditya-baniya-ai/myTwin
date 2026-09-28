@@ -265,7 +265,10 @@ struct ContentView: View {
                 if isSample { sampleBanner }
                 twinContent.frame(height: asksCheckIn ? 420 : 520)   // Dash takes the card's room
                 supportCard
-                ActionFeedbackView(daily: daily, now: planningNow)
+                // Checked every minute, so the question comes the minute an activity ends.
+                TimelineView(.everyMinute) { _ in
+                    ActionFeedbackView(daily: daily, now: planningNow, upNext: upNext)
+                }
 
                 if fullAccess && hasPrediction {
                     tabLink("Predictions", tab: .predictions) {
@@ -914,6 +917,14 @@ struct ContentView: View {
             PlanItem(kind: .event, title: $0.title, start: $0.start, end: $0.end, color: .green,
                      movement: $0.movement, eventID: $0.eventID ?? $0.id.uuidString)
         }).sorted { $0.start < $1.start }
+    }
+    /// The next thing today, with a line on doing well in it. Energy at that hour comes from
+    /// the forecast with Pro, or else from how you said you feel.
+    private var upNext: (item: PlanItem, tip: String)? {
+        guard let item = currentEvents.filter({ $0.start > planningNow }).min(by: { $0.start < $1.start }) else { return nil }
+        let charge = fullAccess && hasPrediction ? DayCharge.remaining(from: dayStart, at: item.start) : nil
+        return (item, EventTips.tip(title: item.title, isActivity: item.movement != nil,
+                                    charge: charge, reported: daily.currentCheckIn))
     }
     private var plannedItems: [PlanItem] {
         DayPlanner.plan(events: currentEvents, dayStart: dayStart, now: planningNow, bedtime: bedtimeDate,
