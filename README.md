@@ -39,6 +39,7 @@ you when your last coffee still clears before bed. When the day falls apart, one
 ## Contents
 
 - [Who it's for](#who-its-for)
+- [Try it as a guest](#try-it-as-a-guest)
 - [Meet Dash](#meet-dash)
 - [Features](#features)
 - [Free and Pro, powered by RevenueCat](#free-and-pro-powered-by-revenuecat)
@@ -54,6 +55,56 @@ you when your last coffee still clears before bed. When the day falls apart, one
 | 💼 **The busy professional** | Back-to-back meetings, the 3 PM crash, one coffee too many. | Predicts the dip before it hits, finds the one free gap for a walk or a nap, and warns you before a demanding meeting lands on a low-energy hour. |
 | 🏃 **The athlete** | Training hard on a poor night's sleep, or wasting a great one. | Compares last night with *your* baseline, suggests when to push and when to go easy, and swaps a strength session for mobility work when you're drained. |
 | 🙂 **Everyone else** | Wearables produce numbers, not decisions. | One glance at Dash says how today will go. One tap fixes the plan. No watch? A three-button check-in works from day one. |
+
+---
+
+## Try it as a guest
+
+No watch, no Apple Health, no calendar? Judges and new users can explore **everything** in a
+guest demo. "Alex" comes with a full fictional life: a week of calendar, sleep and heart rate,
+steps, workouts and weight, and the questions they keep asking. Nothing of yours is read or
+saved, and you can switch to your own account at any time.
+
+<table>
+<tr>
+<td align="center" width="33%"><img src="assets/screenshots/welcome.jpg" width="220" alt="Welcome screen"/><br/><b>1. Welcome</b><br/><sub>The live 3D Dash waves hello. Continue as a guest, or as a user.</sub></td>
+<td align="center" width="33%"><img src="assets/screenshots/guest_choice.jpg" width="220" alt="Choose Pro or free"/><br/><b>2. Pick a version</b><br/><sub>Try myTwin with Pro, or the free version.</sub></td>
+<td align="center" width="33%"><img src="assets/screenshots/demo_free_home.jpg" width="220" alt="The demo"/><br/><b>3. You're in</b><br/><sub>Every demo page is labelled, with a Free/Pro switch and a way out.</sub></td>
+</tr>
+</table>
+
+### Free and Pro, side by side
+
+Flip the switch on any demo page and the app changes on the spot, with no restart. The
+free plan shows your day; Pro adds suggestions in your free time and **Rescue my day**.
+
+<p align="center">
+  <img src="assets/screenshots/demo_free_plan.jpg" width="250" alt="Plan in the free version"/>
+  &nbsp;&nbsp;➜&nbsp;&nbsp;
+  <img src="assets/screenshots/demo_pro_plan.jpg" width="250" alt="Plan in Pro"/>
+</p>
+
+### Everything a real user has, simulated
+
+<table>
+<tr>
+<td align="center" width="33%"><img src="assets/screenshots/demo_week.jpg" width="220" alt="Demo week calendar"/><br/><b>A week of calendar</b><br/><sub>Work, school, fitness and personal events, plus an all-day birthday.</sub></td>
+<td align="center" width="33%"><img src="assets/screenshots/demo_activity.jpg" width="220" alt="Demo activity"/><br/><b>Activity and goals</b><br/><sub>Steps, calories, a week of sleep and weight, with goals to fill.</sub></td>
+<td align="center" width="33%"><img src="assets/screenshots/demo_pro_questions.jpg" width="220" alt="Demo questions with answers"/><br/><b>Questions and answers</b><br/><sub>"You often ask", answered in Pro. Chat and voice work too.</sub></td>
+</tr>
+</table>
+
+### Or set up your own
+
+**Continue as a user** asks for your name and age, then connects Apple Health and Calendar,
+with a green tick as each one is allowed. You can skip and connect later from the You page,
+and **Try the demo** there takes you back to the guest mode at any time.
+
+<p align="center">
+  <img src="assets/screenshots/user_about.jpg" width="250" alt="About you"/>
+  &nbsp;&nbsp;➜&nbsp;&nbsp;
+  <img src="assets/screenshots/user_connect.jpg" width="250" alt="Connect Apple Health and Calendar"/>
+</p>
 
 ---
 
@@ -276,9 +327,11 @@ shortcuts. New users see three starter questions.
 - **Pro:** Dash's latest answer sits under each question, and a tap asks again for a fresh one.
 
 <p align="center">
-  <img src="assets/screenshots/questions_free.jpg" width="250" alt="Questions card, free"/>
-  &nbsp;&nbsp;
-  <img src="assets/screenshots/questions_locked.jpg" width="250" alt="Upgrade prompt"/>
+  <img src="assets/screenshots/questions_free.jpg" width="220" alt="Questions card, free"/>
+  &nbsp;
+  <img src="assets/screenshots/questions_locked.jpg" width="220" alt="Upgrade prompt"/>
+  &nbsp;
+  <img src="assets/screenshots/demo_pro_questions.jpg" width="220" alt="Questions with answers, Pro"/>
 </p>
 
 ### 13. Works while the app is closed
