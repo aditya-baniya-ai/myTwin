@@ -20,6 +20,7 @@ struct WelcomeView: View {
     @FocusState private var focusedField: Field?
     @State private var health = HealthManager()
     @State private var calendar = CalendarManager()
+    @State private var greeting: AvatarGesture?
 
     private enum Field { case name, age }
 
@@ -58,11 +59,13 @@ struct WelcomeView: View {
     private var start: some View {
         VStack(spacing: 0) {
             Spacer()
-            Image("Dash_normal")
-                .resizable()
-                .scaledToFit()
-                .frame(height: 220)
-                .accessibilityHidden(true)
+            // Dash himself, live and charged, waving hello once he's on his feet.
+            Avatar3DView(energy: 90, gesture: greeting)
+                .frame(height: 300)
+                .task {
+                    try? await Task.sleep(for: .seconds(2))
+                    greeting = AvatarGesture.all.first { $0.clip == "wave" }
+                }
             BrandTitle()
                 .padding(.top, 12)
                 .padding(.bottom, 6)
