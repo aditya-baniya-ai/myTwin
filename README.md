@@ -4,7 +4,7 @@
 
 ### Your energy, predicted from your own sleep, and a 3D twin who plans your day around it.
 
-<img src="assets/Dash/renders/Dash_Hero.png" width="260" alt="Dash, the myTwin character"/>
+<img src="assets/Dash/videos/dash_wave.gif" width="260" alt="Dash waving hello"/>
 
 ![iOS 26](https://img.shields.io/badge/iOS-26-black?logo=apple)
 ![Swift](https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white)
@@ -86,21 +86,20 @@ The same four states, live in the app, each with its own glow:
 | 🟠 **Tired** | 30–54% | Shoulders drop, breathing slows, and the yawns start. |
 | 🔴 **Exhausted** | 0–29% | Barely upright, eyes heavy. Dozes off mid-idle. |
 
-### Gestures
+### Dash in motion
 
-On top of each idle loop, Dash plays one-shot gestures that suit his mood: he waves and
-jumps when energetic, stretches when normal, yawns when tired and dozes when exhausted.
+Recorded live in the app. On top of each idle loop, Dash plays gestures that suit his
+mood: he waves and jumps when he's energetic, yawns when he's tired, and nods off when he's
+exhausted. He also waves to get your attention when he has something to tell you.
 
 <table>
 <tr>
-<td align="center"><img src="assets/Dash/renders/gestures/Dash_yawn_start.jpg" width="190"/><br/><sub><b>Yawn</b>, when he's tired</sub></td>
-<td align="center"><img src="assets/Dash/renders/gestures/Dash_stretch.jpg" width="190"/><br/><sub><b>Stretch</b>, on a normal day</sub></td>
-<td align="center"><img src="assets/Dash/renders/gestures/Dash_celebrate.jpg" width="190"/><br/><sub><b>Celebrate</b>, arms up</sub></td>
-<td align="center"><img src="assets/Dash/renders/gestures/Dash_exhausted_slump.jpg" width="190"/><br/><sub><b>Exhausted</b>, head dropping</sub></td>
+<td align="center"><img src="assets/Dash/videos/dash_wave.gif" width="200" alt="Dash waving"/><br/><b>👋 Greeting</b><br/><sub>Energetic · says hello when he speaks up</sub></td>
+<td align="center"><img src="assets/Dash/videos/dash_jump.gif" width="200" alt="Dash jumping"/><br/><b>⚡ Jump</b><br/><sub>Energetic · rested and charged</sub></td>
+<td align="center"><img src="assets/Dash/videos/dash_yawn.gif" width="200" alt="Dash yawning"/><br/><b>🥱 Yawn</b><br/><sub>Tired · running low</sub></td>
+<td align="center"><img src="assets/Dash/videos/dash_doze.gif" width="200" alt="Dash dozing off"/><br/><b>😴 Doze</b><br/><sub>Exhausted · nodding off</sub></td>
 </tr>
 </table>
-
-<sub>Frames rendered in Blender from Dash's source clips.</sub>
 
 ### Character sheets
 
