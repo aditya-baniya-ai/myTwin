@@ -40,7 +40,13 @@ struct PlanningPreferences: Codable, Equatable {
     var quietEnd = 8
     /// Kept optional so settings saved before these existed still load; nil means on.
     var bedtimeEvent: Bool? = nil
+    var stepWalks: Bool? = nil
 
+    /// Checks your steps every couple of hours and adds a short walk when you're behind.
+    var addsStepWalks: Bool {
+        get { stepWalks ?? true }
+        set { stepWalks = newValue }
+    }
     /// A repeating "Bedtime" event in your calendar at your bedtime.
     var addsBedtimeEvent: Bool {
         get { bedtimeEvent ?? true }

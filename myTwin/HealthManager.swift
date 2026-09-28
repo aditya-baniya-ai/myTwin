@@ -133,7 +133,8 @@ final class HealthManager {
         guard !isDemo else { return }
         let watched: [HKSampleType] = [HKCategoryType(.sleepAnalysis),
                                        HKQuantityType(.restingHeartRate),
-                                       HKQuantityType(.bodyMass)]
+                                       HKQuantityType(.bodyMass),
+                                       HKQuantityType(.stepCount)]      // for the step-goal check
         for type in watched {
             store.enableBackgroundDelivery(for: type, frequency: .hourly) { _, _ in }
             let observer = HKObserverQuery(sampleType: type, predicate: nil) { _, done, _ in
@@ -577,6 +578,29 @@ final class HealthManager {
             options: options
         )
         return try? await descriptor.result(for: store)
+    }
+
+    /// Recent days before today, 24 hourly step counts each, most recent first. What you
+    /// usually walk from a given hour on is read from these.
+    func hourlySteps(days: Int = 21) async -> [[Double]] {
+        if isDemo { return DemoData.hourlySteps }
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: .now)
+        guard let start = calendar.date(byAdding: .day, value: -days, to: today) else { return [] }
+        let descriptor = HKStatisticsCollectionQueryDescriptor(
+            predicate: .quantitySample(type: HKQuantityType(.stepCount),
+                                       predicate: HKQuery.predicateForSamples(withStart: start, end: today)),
+            options: .cumulativeSum, anchorDate: today, intervalComponents: DateComponents(hour: 1))
+        guard let collection = try? await descriptor.result(for: store) else { return [] }
+        var byDay: [Date: [Double]] = [:]
+        collection.enumerateStatistics(from: start, to: today) { stats, _ in
+            let day = calendar.startOfDay(for: stats.startDate)
+            let hour = calendar.component(.hour, from: stats.startDate)
+            var hours = byDay[day] ?? [Double](repeating: 0, count: 24)
+            hours[hour] = stats.sumQuantity()?.doubleValue(for: .count()) ?? 0
+            byDay[day] = hours
+        }
+        return byDay.sorted { $0.key > $1.key }.map(\.value)
     }
 
     /// Steps from `start` until now. Nil when Health has no step samples in that window,

@@ -26,6 +26,9 @@ struct PlanningPreferencesView: View {
                 }
                 Section {
                     optionalGoal("Step goal", value: $preferences.stepGoal, initial: 6000, range: 100...100000)
+                    if preferences.stepGoal != nil {
+                        Toggle("Add walks when I'm behind", isOn: $preferences.addsStepWalks)
+                    }
                     optionalGoal("Active energy goal (kcal)", value: $preferences.activeEnergyGoal, initial: 300, range: 10...5000)
                     optionalGoal("Weight goal (lb)", value: $preferences.weightGoal, initial: 150, range: 50...700)
                     Stepper("Sleep goal: \(preferences.sleepGoal, specifier: "%.1f") hours", value: $preferences.sleepGoal, in: 4...12, step: 0.5)
@@ -335,5 +338,33 @@ struct UpNextCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .dashboardCard()
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// On the Activity page: where today's steps are heading, and the walk if one was added.
+struct StepPaceCard: View {
+    let pace: StepPace
+    let walk: Date?
+
+    private func count(_ value: Double) -> String { value.formatted(.number.precision(.fractionLength(0))) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(pace.onTrack ? "On pace for your step goal" : "Behind your step goal",
+                  systemImage: pace.onTrack ? "checkmark.circle.fill" : "figure.walk")
+                .font(.headline)
+                .foregroundStyle(pace.onTrack ? .green : .orange)
+            Text("\(count(pace.steps)) so far. At your usual pace you'll end near \(count((pace.projected / 100).rounded() * 100)) of \(count(pace.goal)).")
+                .font(.subheadline)
+            if let walk {
+                Text("A walk is on your calendar at \(walk.formatted(date: .omitted, time: .shortened)).")
+                    .font(.subheadline.weight(.semibold))
+            } else if !pace.onTrack {
+                Text("A \(pace.walkMinutes)-minute walk would close the gap. myTwin checks every couple of hours and adds one when you're free.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .dashboardCard()
     }
 }

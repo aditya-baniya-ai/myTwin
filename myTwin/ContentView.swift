@@ -25,6 +25,9 @@ struct ContentView: View {
     @State private var nudgeAt: Date?
     /// The sample day's own memory of nudges, so it never writes to the real one.
     @State private var sampleNudgeLog = DashNudges.Log()
+    /// Today's steps against your goal, and the demo's own record of step checks.
+    @State private var stepPace: StepPace?
+    @State private var demoStepLog = StepCheck.Log()
 
     @Environment(\.scenePhase) private var scenePhase
     @State private var health: HealthManager
@@ -137,6 +140,7 @@ struct ContentView: View {
         .task {
             try? await Task.sleep(for: .seconds(3))      // let the day load and him appear
             while !Task.isCancelled {
+                await checkSteps()
                 await considerNudge()
                 try? await Task.sleep(for: .seconds(15 * 60))
             }
@@ -503,6 +507,7 @@ struct ContentView: View {
         page("Today's activity", tab: .activity) {
             if isSample { sampleBanner }
             activity
+            if let stepPace { StepPaceCard(pace: stepPace, walk: calendar.upcomingWalk(after: planningNow)?.startDate) }
             if health.isAuthorized {
                 ActivityDetail(snapshot: health.snapshot, workouts: workoutDetails)
             }
@@ -1111,6 +1116,20 @@ struct ContentView: View {
         dashGesture = nil                                 // a fresh value, so he waves again
         DispatchQueue.main.async { dashGesture = AvatarGesture.all.first { $0.clip == "wave" } }
         if voice.speaksAnswers { voice.speak(found.line) }
+    }
+
+    /// Where today's steps are heading, and every couple of hours a walk if you're behind.
+    private func checkSteps() async {
+        let preferences = daily.preferences
+        guard health.isAuthorized, let goal = preferences.stepGoal, goal > 0 else { stepPace = nil; return }
+        let steps = isSample ? (health.snapshot.steps ?? 0)
+            : await health.steps(since: Calendar.current.startOfDay(for: .now)) ?? 0
+        stepPace = StepPace.estimate(steps: steps, goal: goal, now: planningNow, history: await health.hourlySteps())
+
+        var log = isSample ? demoStepLog : StepCheck.Log.load()
+        _ = await StepCheck.run(health: health, calendar: calendar, preferences: preferences,
+                                now: planningNow, log: &log, notify: !isSample)
+        if isSample { demoStepLog = log } else { log.save() }
     }
 
     /// Takes Dash up on it: asks him the follow-up in the user's words. It isn't counted

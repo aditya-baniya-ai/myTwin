@@ -257,6 +257,33 @@ final class CalendarManager {
         didMutate()
     }
 
+    // MARK: - Walks for the step goal
+
+    private static let walkURL = URL(string: "mytwin://walk")!
+
+    /// A walk myTwin added that hasn't happened yet today, if there is one. Reads what's
+    /// loaded, so a screen can ask while it draws.
+    func upcomingWalk(after now: Date = .now) -> EKEvent? {
+        events.first { $0.url == Self.walkURL && $0.startDate > now }
+    }
+
+    /// Adds a short walk. Returns whether it was saved.
+    @discardableResult
+    func addWalk(at start: Date, minutes: Int) -> Bool {
+        guard isAuthorized else { return false }
+        let event = EKEvent(eventStore: store)
+        event.title = "Walk · \(minutes) min"
+        event.notes = "Added by myTwin for your step goal. Turn it off in myTwin → Make it yours."
+        event.url = Self.walkURL
+        event.startDate = start
+        event.endDate = start.addingTimeInterval(Double(minutes) * 60)
+        if !isDemo {
+            guard let calendar = store.defaultCalendarForNewEvents, calendar.allowsContentModifications else { return false }
+            event.calendar = calendar
+        }
+        do { try save(event); didMutate(); return true } catch { return false }
+    }
+
     // MARK: - Bedtime
 
     private static let bedtimeKey = "calendar.bedtime.event"

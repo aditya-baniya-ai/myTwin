@@ -26,6 +26,11 @@ enum TwinRefresh {
         await schedule(reading: reading, dayStart: dayStart,
                        bedtime: (PlanningPreferences.load().bedtimeHour, PlanningPreferences.load().bedtimeMinute), calendar: calendar,
                        trained: trained, through: NotificationManager())
+
+        // New steps woke us too: time to see whether today's goal is still in reach?
+        var log = StepCheck.Log.load()
+        _ = await StepCheck.run(health: health, calendar: calendar, preferences: .load(), log: &log)
+        log.save()
     }
 
     /// The twin the widget and the app icon show. One number, so all three agree.

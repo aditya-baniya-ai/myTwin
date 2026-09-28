@@ -46,6 +46,14 @@ enum DemoData {
         }
     }
 
+    /// Two weeks of hourly steps: a busy morning and a quiet evening, so at 2 PM Alex is on
+    /// course to fall a little short of 8,000 and Dash suggests a walk.
+    static var hourlySteps: [[Double]] {
+        let usual: [Double] = [0, 0, 0, 0, 0, 0, 0, 400, 700, 300, 250, 300, 900, 400,
+                               200, 150, 200, 250, 150, 100, 60, 40, 0, 0]
+        return (0..<14).map { day in usual.map { ($0 * (0.9 + Double(day % 5) * 0.05)).rounded() } }
+    }
+
     /// Days with each kind of data in the last 90, for "What myTwin can read".
     static let coverage = ["Sleep": 88, "Resting heart rate": 90, "Heart rate variability": 61,
                            "Steps": 90, "Active energy": 90]
