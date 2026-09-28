@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// The five places the app goes.
+/// The six places the app goes.
 enum TwinTab: String, CaseIterable, Identifiable {
-    case twin, predictions, activity, plan, you
+    case twin, predictions, activity, plan, tomorrow, you
 
     var id: String { rawValue }
 
@@ -12,6 +12,7 @@ enum TwinTab: String, CaseIterable, Identifiable {
         case .predictions: "chart.line.uptrend.xyaxis"
         case .activity: "flame.fill"
         case .plan: "calendar"
+        case .tomorrow: "sun.horizon.fill"
         case .you: "person.crop.circle"
         }
     }
@@ -36,6 +37,7 @@ enum TwinTab: String, CaseIterable, Identifiable {
         case .predictions: "Predictions"
         case .activity: "Activity"
         case .plan: "Plan"
+        case .tomorrow: "Tomorrow"
         case .you: "You"
         }
     }

@@ -46,6 +46,9 @@ enum DemoData {
         }
     }
 
+    /// What Alex wrote last night for today, for the nightly check.
+    static let todaysGoals = "Finish the lit review draft, 2 hrs\nEmail Professor Lee\nCall mom at 7pm\nGrocery run, 30 min"
+
     /// Two weeks of hourly steps: a busy morning and a quiet evening, so at 2 PM Alex is on
     /// course to fall a little short of 8,000 and Dash suggests a walk.
     static var hourlySteps: [[Double]] {

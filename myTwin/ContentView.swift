@@ -28,6 +28,7 @@ struct ContentView: View {
     /// Today's steps against your goal, and the demo's own record of step checks.
     @State private var stepPace: StepPace?
     @State private var demoStepLog = StepCheck.Log()
+    @State private var goals: GoalBook
 
     @Environment(\.scenePhase) private var scenePhase
     @State private var health: HealthManager
@@ -75,6 +76,7 @@ struct ContentView: View {
         self.leaveSample = leaveSample
         self.enterSample = enterSample
         _daily = State(initialValue: DailySupport(isSample: isSample))
+        _goals = State(initialValue: GoalBook(demo: isSample))
         _dismissed = State(initialValue: isSample ? [] : DismissedSuggestions.today())
         // The chat uses the same health and calendar data the home screen shows, and speaks
         // through the same voice that listens for "twin".
@@ -257,6 +259,7 @@ struct ContentView: View {
         case .predictions: predictionsPage
         case .activity: activityPage
         case .plan: planPage
+        case .tomorrow: tomorrowPage
         case .you: youPage
         }
     }
@@ -270,6 +273,7 @@ struct ContentView: View {
             VStack(spacing: 18) {
                 if isSample { sampleBanner }
                 twinContent.frame(height: asksCheckIn ? 420 : 520)   // Dash takes the card's room
+                tomorrowCard
                 supportCard
                 // Checked every minute, so the question comes the minute an activity ends.
                 TimelineView(.everyMinute) { _ in
@@ -527,6 +531,38 @@ struct ContentView: View {
                 Button("Rescue my day", systemImage: "wand.and.stars") { openRescue() }.buttonStyle(.borderedProminent)
             }
             if planSpan == .day { plan } else { weekPlan }
+        }
+    }
+
+    /// Tomorrow's goals: written by anyone, planned into the calendar with Pro.
+    private var tomorrowPage: some View {
+        page("Tomorrow", tab: .tomorrow) {
+            if isSample { sampleBanner }
+            TomorrowView(book: goals, calendar: calendar, preferences: daily.preferences,
+                         isPro: hasPro, now: planningNow, upgrade: { showPaywall = true })
+        }
+    }
+
+    /// From 5 PM on Dash's page: a nudge to write tomorrow's goals, and how many you have.
+    @ViewBuilder private var tomorrowCard: some View {
+        if isSample || Calendar.current.component(.hour, from: planningNow) >= 17 {
+            let written = goals.day(Calendar.current.date(byAdding: .day, value: 1, to: planningNow) ?? planningNow).goals.count
+            Button { withAnimation(.snappy) { tab = .tomorrow } } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "sun.horizon.fill").font(.title2).foregroundStyle(.orange)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Plan tomorrow").font(.headline)
+                        Text(written == 0 ? "Write down what you want to get done."
+                                          : "\(written) goal\(written == 1 ? "" : "s") written. Review or plan them.")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right").foregroundStyle(.secondary)
+                }
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .dashboardCard()
         }
     }
 

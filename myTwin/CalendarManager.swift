@@ -284,6 +284,49 @@ final class CalendarManager {
         do { try save(event); didMutate(); return true } catch { return false }
     }
 
+    // MARK: - Goals
+
+    private static let goalPrefix = "mytwin://goal/"
+
+    /// Events on `day` other than goals myTwin planned, which get replaced on a re-plan.
+    func busy(on day: Date) -> [DateInterval] {
+        loadWeekEvents()
+        let days = Calendar.current
+        return week.filter { !$0.isAllDay && days.isDate($0.startDate, inSameDayAs: day)
+            && !($0.url?.absoluteString.hasPrefix(Self.goalPrefix) ?? false) }
+            .map { DateInterval(start: $0.startDate, end: $0.endDate) }
+    }
+
+    /// Puts planned goals on the calendar with a reminder ten minutes before, replacing any
+    /// goals planned for that day before. Returns how many were saved.
+    @discardableResult
+    func placeGoals(_ goals: [(goal: Goal, start: Date)], on day: Date) -> Int {
+        guard isAuthorized else { return 0 }
+        loadWeekEvents()
+        let days = Calendar.current
+        for old in week where days.isDate(old.startDate, inSameDayAs: day)
+            && (old.url?.absoluteString.hasPrefix(Self.goalPrefix) ?? false) {
+            try? delete(old)
+        }
+        var saved = 0
+        for (goal, start) in goals {
+            let event = EKEvent(eventStore: store)
+            event.title = goal.title
+            event.notes = "A goal you set in myTwin."
+            event.url = URL(string: Self.goalPrefix + goal.id.uuidString)
+            event.startDate = start
+            event.endDate = start.addingTimeInterval(Double(goal.minutes) * 60)
+            if !isDemo {
+                guard let calendar = store.defaultCalendarForNewEvents, calendar.allowsContentModifications else { break }
+                event.calendar = calendar
+                event.addAlarm(EKAlarm(relativeOffset: -600))
+            }
+            if (try? save(event)) != nil { saved += 1 }
+        }
+        didMutate()
+        return saved
+    }
+
     // MARK: - Bedtime
 
     private static let bedtimeKey = "calendar.bedtime.event"

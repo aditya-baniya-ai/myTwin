@@ -109,4 +109,28 @@ final class OnboardingTests: XCTestCase {
         XCTAssertTrue(app.buttons["You"].firstMatch.waitForExistence(timeout: 15), "home screen after setup")
         XCTAssertFalse(app.staticTexts["Demo · fictional data · 2 PM"].exists)
     }
+
+    /// Write a goal for tomorrow and let Pro plan it into the (demo) calendar.
+    @MainActor func testTomorrowGoalsArePlanned() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--sample-day"]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Demo · fictional data · 2 PM"].waitForExistence(timeout: 30))
+        dismissNudge(app)
+        open("Tomorrow", in: app)
+        XCTAssertTrue(app.staticTexts["Did you finish today's goals?"].waitForExistence(timeout: 5))
+
+        let box = app.textViews["Goals for tomorrow"]
+        XCTAssertTrue(box.waitForExistence(timeout: 5))
+        box.tap()
+        box.typeText("Write the report, 2 hrs, morning\nCall mom at 8pm")
+        app.buttons["Done"].firstMatch.tap()
+
+        let plan = app.buttons["Plan my day tomorrow"]
+        for _ in 0..<4 where !plan.isHittable { app.swipeUp(velocity: .slow) }
+        plan.tap()
+        XCTAssertTrue(app.staticTexts["Planned 2 goals into tomorrow, with reminders."].waitForExistence(timeout: 5))
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "Tomorrow planned"; screenshot.lifetime = .keepAlways; add(screenshot)
+    }
 }
