@@ -177,7 +177,7 @@ struct TomorrowView: View {
                 Text(outlook.headline).font(.headline)
                     .accessibilityIdentifier("tomorrowOutlook")
                 if let start = outlook.dayStart {
-                    Text("Based on past model estimates after \(outlook.comparableNights) nights within one hour of this sleep length.")
+                    Text("If you sleep \(expectedSleepHours, specifier: "%g") hours and your heart rate and sleep quality stay at their recent normal.")
                         .font(.subheadline)
                     let wake = Calendar.current.date(bySettingHour: max(preferences.quietEnd, 6),
                                                      minute: 0, second: 0, of: tomorrow) ?? tomorrow
@@ -186,7 +186,7 @@ struct TomorrowView: View {
                     Text("The hourly shape is a shared illustration, not a learned personal rhythm. These are planning estimates, not measured energy or a guarantee.")
                         .font(.caption).foregroundStyle(.secondary)
                 } else {
-                    Text("Found \(outlook.comparableNights) comparable nights with enough earlier history. At least 3 are needed. You can still plan using the usual time-of-day pattern.")
+                    Text("Needs seven recent nights of sleep in Apple Health to compare against. You can still plan using the usual time-of-day pattern.")
                         .font(.subheadline).foregroundStyle(.secondary)
                 }
                 Text("The curve starts at your quiet-hours end. Tomorrow’s actual sleep and a fresh check-in may change the outlook. Your saved goals stay in place until you change them.")

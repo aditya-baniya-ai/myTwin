@@ -18,11 +18,14 @@ final class TomorrowForecastUITests: XCTestCase {
         initial.name = "Tomorrow prediction"
         initial.lifetime = .keepAlways
         add(initial)
-        let increase = sleep.buttons["tomorrowSleep-Increment"]
-        for _ in 0..<5 { increase.tap() }
-        XCTAssertTrue(outlook.label.contains("Still learning"))
+        // Less sleep than usual: the outlook follows the number you set.
+        let before = outlook.label
+        let decrease = sleep.buttons["tomorrowSleep-Decrement"]
+        for _ in 0..<6 { decrease.tap() }
+        XCTAssertNotEqual(outlook.label, before, "the outlook responds to expected sleep")
+        XCTAssertTrue(outlook.label.contains("below"), outlook.label)
         let screenshot = XCTAttachment(screenshot: app.screenshot())
-        screenshot.name = "Tomorrow with insufficient comparable nights"
+        screenshot.name = "Tomorrow after a short night"
         screenshot.lifetime = .keepAlways
         add(screenshot)
         app.terminate()

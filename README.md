@@ -623,15 +623,14 @@ MIT. See [LICENSE](LICENSE).
 
 ## Tomorrow’s prediction
 
-The Tomorrow tab includes a Pro preview before you plan your goals. Adjust expected
-sleep for tonight (initially your chosen sleep goal). Dash compares that assumption
-with nights in the last 60 days whose sleep duration was within one hour. Each
-comparison replays the existing energy model using only that day's earlier history.
-At least three eligible nights are required; otherwise it shows “Still learning.”
+The Tomorrow tab includes a Pro preview before you plan your goals. Set how long you
+expect to sleep tonight (it starts at your sleep goal), and the same model that makes
+today's prediction is asked about that night: your sleep length, with deep sleep and
+REM at your usual share of the night and efficiency and resting heart rate at your
+recent normal. It needs the same seven recent nights as today's prediction; otherwise
+it shows “Still learning.” More sleep never gives a worse outlook, and the answer moves
+with the number you set.
 
-The outlook uses the median of those historical model starting estimates. It is an
-exploratory analogy, not a validated next-day predictor, and it does not infer future
-heart rate or sleep stages. The hourly shape remains the shared illustrative curve.
-Tomorrow's goal planner uses that starting estimate when available; this changes the
-curve's level, not the ranking of its peak hours. Saved goals do not automatically move
-when expected sleep changes. Nothing is written to HealthKit by this preview.
+It is a what-if on the shipped model, not a validated next-day predictor: tonight's heart
+rate and sleep stages can't be known in advance, so they are assumed typical. The hourly
+shape remains the shared illustrative curve. Nothing is written to HealthKit.
