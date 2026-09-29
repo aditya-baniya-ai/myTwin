@@ -95,10 +95,36 @@ final class GoalBook {
         store(day, for: date)
     }
 
-    /// A goal written back as a line, keeping its length so it's read the same way again.
-    private func line(for goal: Goal) -> String {
+    /// A goal you changed by hand: its name, length or time. The day's text is written
+    /// again from its goals, because adding the next goal reads that text back, and would
+    /// otherwise bring the old line back over your change.
+    func edit(_ goal: Goal, on date: Date) {
+        var day = day(date)
+        guard let index = day.goals.firstIndex(where: { $0.id == goal.id }) else { return }
+        day.goals[index] = goal
+        day.text = day.goals.map { line(for: $0, keepingTime: true) }.joined(separator: "\n")
+        store(day, for: date)
+    }
+
+    func delete(_ goal: Goal, on date: Date) {
+        var day = day(date)
+        day.goals.removeAll { $0.id == goal.id }
+        day.text = day.goals.map { line(for: $0, keepingTime: true) }.joined(separator: "\n")
+        store(day, for: date)
+    }
+
+    /// A goal written back as a line, keeping its length, and if asked its time or part of
+    /// the day, so it's read the same way again.
+    private func line(for goal: Goal, keepingTime: Bool = false) -> String {
         let length = goal.minutes % 60 == 0 ? "\(goal.minutes / 60) hr" : "\(goal.minutes) min"
-        return "\(goal.title), \(length)"
+        var parts = [goal.title, length]
+        if keepingTime, let hour = goal.hour {
+            let minute = (goal.minute ?? 0) > 0 ? String(format: ":%02d", goal.minute ?? 0) : ""
+            parts.append("at \(hour % 12 == 0 ? 12 : hour % 12)\(minute)\(hour < 12 ? "am" : "pm")")
+        } else if keepingTime, let window = goal.window {
+            parts.append(window.rawValue)
+        }
+        return parts.joined(separator: ", ")
     }
 
     private func store(_ day: Day, for date: Date) {

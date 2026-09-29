@@ -148,14 +148,30 @@ final class OnboardingTests: XCTestCase {
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         field.tap()
         field.typeText("Call the bank, 15 min\n")
-        let goal = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Call the bank'")).firstMatch
+        let goal = app.buttons["Call the bank"]
         XCTAssertTrue(goal.waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["Say today's goals"].exists)
         XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Add a length'")).firstMatch.exists,
                        "the hint line is gone")
+
+        // Tap its name to edit it: give it a time, 4 PM.
         goal.tap()                                         // return already put the keyboard away
+        let timed = app.switches["Time"]
+        XCTAssertTrue(timed.waitForExistence(timeout: 5))
+        timed.switches.firstMatch.tap()
+        let wheels = app.pickerWheels
+        XCTAssertTrue(wheels.element(boundBy: 0).waitForExistence(timeout: 5))
+        wheels.element(boundBy: 0).adjust(toPickerWheelValue: "4")
+        wheels.element(boundBy: 1).adjust(toPickerWheelValue: "00")
+        wheels.element(boundBy: 2).adjust(toPickerWheelValue: "PM")
+        let editor = XCTAttachment(screenshot: app.screenshot())
+        editor.name = "Editing a goal"; editor.lifetime = .keepAlways; add(editor)
+        app.buttons["Save"].tap()
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH '4:00'")).firstMatch.waitForExistence(timeout: 5),
+                      "its time shows on the row")
         let shot = XCTAttachment(screenshot: app.screenshot())
         shot.name = "Goal added for today"; shot.lifetime = .keepAlways; add(shot)
+        app.buttons["Tick off Call the bank"].tap()
 
         // With Pro, the rest go into today's calendar, after 2 PM, with times you can change.
         let plan = app.buttons["Plan the rest of today"]

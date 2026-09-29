@@ -22,6 +22,8 @@ struct TomorrowView: View {
     @State private var hearing = false
     /// A goal being typed for today.
     @State private var todayLine = ""
+    /// One of today's goals you're editing.
+    @State private var editing: Goal?
     /// The planned goal whose time you're changing, and the time on the wheel.
     @State private var moving: Goal?
     @State private var newTime = Date.now
@@ -57,6 +59,9 @@ struct TomorrowView: View {
             }
             .presentationDetents([.height(300)])
         }
+        .sheet(item: $editing) { goal in
+            GoalEditor(goal: goal, day: now, save: saveEdit, delete: { deleteGoal(goal) })
+        }
         .onAppear { text = next.text }
         .onChange(of: tomorrow) { text = next.text }
         .onChange(of: isPro) { results = [:] }
@@ -76,11 +81,17 @@ struct TomorrowView: View {
             VStack(spacing: 0) {
                 ForEach(today.goals) { goal in
                     HStack(spacing: 12) {
+                        // The circle ticks it off; the name opens it for editing.
                         Button { book.toggle(goal, on: now) } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: goal.done ? "checkmark.circle.fill" : goal.moved ? "arrow.turn.down.right" : "circle")
-                                    .font(.title3)
-                                    .foregroundStyle(goal.done ? .green : .secondary)
+                            Image(systemName: goal.done ? "checkmark.circle.fill" : goal.moved ? "arrow.turn.down.right" : "circle")
+                                .font(.title3)
+                                .foregroundStyle(goal.done ? .green : .secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Tick off \(goal.title)")
+                        .accessibilityAddTraits(goal.done ? [.isSelected] : [])
+                        Button { editing = goal } label: {
+                            HStack {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(goal.title).strikethrough(goal.done).foregroundStyle(goal.done ? .secondary : .primary)
                                     if goal.moved { Text("Moved to tomorrow").font(.caption).foregroundStyle(.secondary) }
@@ -92,9 +103,22 @@ struct TomorrowView: View {
                             .contentShape(.rect)
                         }
                         .buttonStyle(.plain)
-                        .disabled(goal.moved)
-                        if !goal.done && !goal.moved { timeButton(goal) }
+                        .accessibilityHint("Edit this goal")
+                        if !goal.done && !goal.moved {
+                            if goal.scheduled != nil {
+                                timeButton(goal)
+                            } else if let hour = goal.hour,
+                                      let at = Calendar.current.date(bySettingHour: hour, minute: goal.minute ?? 0, second: 0, of: now) {
+                                // A time you gave it, not on the calendar yet.
+                                Button(at.formatted(date: .omitted, time: .shortened)) { editing = goal }
+                                    .font(.subheadline.weight(.semibold))
+                                    .buttonStyle(.bordered)
+                                    .tint(.secondary)
+                                    .accessibilityHint("Edit this goal")
+                            }
+                        }
                     }
+                    .disabled(goal.moved)
                     if goal.id != today.goals.last?.id { Divider() }
                 }
                 if today.goals.isEmpty {
@@ -325,12 +349,28 @@ struct TomorrowView: View {
         let overlaps = (calendar.busy(on: start) + others).contains { $0.start < end && $0.end > start }
         if overlaps { clashes.insert(goal.id) } else { clashes.remove(goal.id) }
 
-        calendar.moveGoal(goal, to: start)
+        var moved = goal
+        moved.scheduled = start
+        calendar.updateGoal(moved)
         book.reschedule(goal, to: start, on: start)
         results[GoalBook.name(start)] = "Moved \(goal.title) to \(start.formatted(date: .omitted, time: .shortened))."
         guard !book.isDemo, Calendar.current.isDate(start, inSameDayAs: tomorrow) else { return }
         let planned = next.goals.compactMap { goal in goal.scheduled.map { (goal: goal, start: $0) } }
         Task { await GoalNotifications.morning(for: tomorrow, goals: planned, wake: preferences.quietEnd) }
+    }
+
+    /// Saves an edited goal of today's, and changes its calendar event to match if it has one.
+    private func saveEdit(_ goal: Goal) {
+        calendar.updateGoal(goal)
+        book.edit(goal, on: now)
+        clashes.remove(goal.id)
+    }
+
+    private func deleteGoal(_ goal: Goal) {
+        var gone = goal
+        gone.scheduled = nil
+        calendar.updateGoal(gone)                          // takes its event off the calendar
+        book.delete(goal, on: now)
     }
 
     /// The evening "did you finish?" for tomorrow's goals, for everyone.
@@ -341,5 +381,89 @@ struct TomorrowView: View {
             await NotificationManager().requestPermission()
         }
         await GoalNotifications.nightly(for: tomorrow, count: next.goals.count, preferences: preferences)
+    }
+}
+
+/// One of today's goals, changed by hand: its name, how long it takes, and when, or deleted.
+/// A goal already on the calendar moves there too.
+private struct GoalEditor: View {
+    let goal: Goal
+    let day: Date
+    let save: (Goal) -> Void
+    let delete: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var title: String
+    @State private var minutes: Int
+    @State private var timed: Bool
+    @State private var time: Date
+
+    init(goal: Goal, day: Date, save: @escaping (Goal) -> Void, delete: @escaping () -> Void) {
+        self.goal = goal
+        self.day = day
+        self.save = save
+        self.delete = delete
+        let named = goal.hour.flatMap { Calendar.current.date(bySettingHour: $0, minute: goal.minute ?? 0, second: 0, of: day) }
+        let nextHour = Calendar.current.nextDate(after: .now, matching: DateComponents(minute: 0), matchingPolicy: .nextTime) ?? day
+        _title = State(initialValue: goal.title)
+        _minutes = State(initialValue: goal.minutes)
+        _timed = State(initialValue: goal.scheduled != nil || named != nil)
+        _time = State(initialValue: goal.scheduled ?? named ?? nextHour)
+    }
+
+    private var lengths: [Int] { Array(Set([5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 240, goal.minutes])).sorted() }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                TextField("Goal", text: $title)
+                Picker("Length", selection: $minutes) {
+                    ForEach(lengths, id: \.self) { value in
+                        Text(value < 60 ? "\(value) min" : value % 60 == 0 ? "\(value / 60) hr" : String(format: "%.1f hr", Double(value) / 60))
+                            .tag(value)
+                    }
+                }
+                Toggle("Time", isOn: $timed)
+                if timed {
+                    DatePicker("Starts", selection: $time, displayedComponents: .hourAndMinute)
+                        .datePickerStyle(.wheel)
+                }
+                if goal.scheduled != nil {
+                    Text(timed ? "It's on your calendar, and moves there too." : "Turning the time off takes it off your calendar.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Section {
+                    Button("Delete goal", role: .destructive) {
+                        delete()
+                        dismiss()
+                    }
+                }
+            }
+            .navigationTitle("Edit goal")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        save(edited)
+                        dismiss()
+                    }
+                    .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+        }
+    }
+
+    /// The goal as you left it. The time is kept on the day being edited.
+    private var edited: Goal {
+        var goal = goal
+        let parts = Calendar.current.dateComponents([.hour, .minute], from: time)
+        let start = Calendar.current.date(bySettingHour: parts.hour ?? 0, minute: parts.minute ?? 0, second: 0, of: day)
+        goal.title = title.trimmingCharacters(in: .whitespaces)
+        goal.minutes = minutes
+        goal.hour = timed ? parts.hour : nil
+        goal.minute = timed ? parts.minute : nil
+        if goal.scheduled != nil { goal.scheduled = timed ? start : nil }
+        return goal
     }
 }

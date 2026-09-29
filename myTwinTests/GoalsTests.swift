@@ -125,7 +125,9 @@ final class GoalsTests: XCTestCase {
         book.schedule([goals[0].id: first, goals[1].id: second], on: tomorrow)
 
         let later = tomorrow.addingTimeInterval(5 * 3600)
-        XCTAssertTrue(calendar.moveGoal(goals[0], to: later))
+        var moved = goals[0]
+        moved.scheduled = later
+        XCTAssertTrue(calendar.updateGoal(moved))
         book.reschedule(goals[0], to: later, on: tomorrow)
 
         let report = calendar.week.first { $0.title == "Finish report" }
@@ -133,6 +135,35 @@ final class GoalsTests: XCTestCase {
         XCTAssertEqual(report?.endDate, later.addingTimeInterval(2 * 3600), "same length")
         XCTAssertEqual(calendar.week.first { $0.title == "Gym" }?.startDate, second, "the other goal stays")
         XCTAssertEqual(book.day(tomorrow).goals.map(\.scheduled), [later, second])
+    }
+
+    /// An edit survives the next goal being added, which reads the day's text back; a
+    /// deleted goal stays gone.
+    @MainActor func testEditsSurviveAddingAnotherGoal() async {
+        let name = "myTwinTests.\(UUID())"
+        let defaults = UserDefaults(suiteName: name)!
+        defer { defaults.removePersistentDomain(forName: name) }
+        let book = GoalBook(defaults: defaults)
+        let today = at(9)
+        book.write("Call the bank, 15 min\nGym 45 min\nRead a chapter", for: today)
+        book.toggle(book.day(today).goals[1], on: today)
+
+        var bank = book.day(today).goals[0]
+        bank.title = "Call the bank about the card"
+        bank.minutes = 20
+        bank.hour = 16
+        bank.minute = 30
+        book.edit(bank, on: today)
+        book.delete(book.day(today).goals[2], on: today)
+        book.write(book.day(today).text + "\nBuy milk", for: today)     // the next goal you add
+
+        let goals = book.day(today).goals
+        XCTAssertEqual(goals.map(\.title), ["Call the bank about the card", "Gym", "Buy milk"])
+        XCTAssertEqual(goals[0].id, bank.id, "the same goal, not a new one")
+        XCTAssertEqual(goals[0].minutes, 20)
+        XCTAssertEqual(goals[0].hour, 16)
+        XCTAssertEqual(goals[0].minute, 30)
+        XCTAssertTrue(goals[1].done, "the tick on another goal survives too")
     }
 
     @MainActor func testDemoKeepsItsGoalsInMemory() async {
