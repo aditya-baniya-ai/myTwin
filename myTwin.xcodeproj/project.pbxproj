@@ -80,6 +80,7 @@
 			membershipExceptions = (
 				Avatar/AvatarEnergyState.swift,
 				Avatar/BatteryGlow.swift,
+				Wellness/NextUpAttributes.swift,
 			);
 			target = 000000000000000200000000 /* myTwinWidgetExtension */;
 		};

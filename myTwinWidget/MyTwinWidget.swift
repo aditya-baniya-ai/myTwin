@@ -105,7 +105,84 @@ struct WidgetView: View {
     }
 }
 
+/// What's next, on the Lock Screen and in the Dynamic Island: Dash as you'll likely be by
+/// then, the next thing on your day, when it starts, and your forecast charge for it.
+struct NextUpLiveActivity: Widget {
+    var body: some WidgetConfiguration {
+        ActivityConfiguration(for: NextUpAttributes.self) { context in
+            NextUpView(state: context.state)
+                .padding(16)
+                .activityBackgroundTint(Color.black.opacity(0.75))
+                .activitySystemActionForegroundColor(.white)
+        } dynamicIsland: { context in
+            DynamicIsland {
+                DynamicIslandExpandedRegion(.leading) {
+                    dash(context.state).frame(width: 44, height: 60)
+                }
+                DynamicIslandExpandedRegion(.trailing) {
+                    Text(context.state.start, style: .time).font(.headline)
+                }
+                DynamicIslandExpandedRegion(.center) {
+                    Text(context.state.title).font(.headline).lineLimit(1)
+                }
+                DynamicIslandExpandedRegion(.bottom) {
+                    Text(NextUpView.energyLine(context.state)).font(.caption).foregroundStyle(.secondary)
+                }
+            } compactLeading: {
+                dash(context.state).frame(width: 20, height: 28)
+            } compactTrailing: {
+                Text(context.state.start, style: .time).font(.caption.weight(.semibold))
+            } minimal: {
+                dash(context.state).frame(width: 20, height: 28)
+            }
+        }
+    }
+
+    /// The small still: the Lock Screen and Dynamic Island draw nothing for a large image.
+    private func dash(_ state: NextUpAttributes.ContentState) -> some View {
+        Image(AvatarEnergyState(score: state.charge ?? 65).stillName + "_small").resizable().scaledToFit()
+    }
+}
+
+struct NextUpView: View {
+    let state: NextUpAttributes.ContentState
+
+    private var mood: AvatarEnergyState { AvatarEnergyState(score: state.charge ?? 65) }
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(mood.stillName + "_small")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 52, height: 76)
+                .background(Circle().fill(RadialGradient(colors: [mood.glow[0].opacity(0.6), .clear],
+                                                         center: .center, startRadius: 2, endRadius: 40)))
+            VStack(alignment: .leading, spacing: 3) {
+                Text("UP NEXT · \(state.start.formatted(date: .omitted, time: .shortened))")
+                    .font(.caption2.weight(.heavy))
+                    .foregroundStyle(mood.glow[0])
+                Text(state.title)
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                Text(Self.energyLine(state))
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.7))
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    static func energyLine(_ state: NextUpAttributes.ContentState) -> String {
+        guard let charge = state.charge else { return "Open myTwin to see how you'll feel." }
+        return "Dash thinks you'll be around \(Int(charge))% then."
+    }
+}
+
 @main
 struct MyTwinWidgetBundle: WidgetBundle {
-    var body: some Widget { MyTwinWidget() }
+    var body: some Widget {
+        MyTwinWidget()
+        NextUpLiveActivity()
+    }
 }

@@ -259,6 +259,17 @@ struct ContentView: View {
             guard let last = chat.messages.last, !last.isUser, !last.byGemini else { return }
             voice.speak(last.text)
         }
+        // What's next, on the Lock Screen and in the Dynamic Island.
+        .onChange(of: nextUpState, initial: true) { NextUpActivity.show(nextUpState) }
+    }
+
+    /// The same "up next" as the dashboard, for the Live Activity. The energy it shows is
+    /// the forecast, so it comes with Pro.
+    private var nextUpState: NextUpAttributes.ContentState? {
+        upNext.map { next in
+            .init(title: next.item.title, start: next.item.start,
+                  charge: fullAccess && hasPrediction ? DayCharge.remaining(from: dayStart, at: next.item.start) * 100 : nil)
+        }
     }
 
     // MARK: - The five pages

@@ -8,5 +8,8 @@
 	<!-- RevenueCat's public SDK key, from Config/Base.xcconfig. -->
 	<key>RevenueCatAPIKey</key>
 	<string>$(REVENUECAT_API_KEY)</string>
+	<!-- What's up next, on the Lock Screen and in the Dynamic Island. -->
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 </dict>
 </plist>
