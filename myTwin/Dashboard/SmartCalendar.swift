@@ -216,6 +216,7 @@ struct SmartCalendar: View {
     var accept: ((PlanItem) -> Void)?
     /// Swipe left, then Remove: the suggestion goes away for today.
     var dismiss: ((PlanItem) -> Void)?
+    var emptyText = "Nothing planned for the rest of today."
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -233,7 +234,7 @@ struct SmartCalendar: View {
                 }
             }
             if items.isEmpty {
-                Text("Nothing planned for the rest of today.")
+                Text(emptyText)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -386,52 +387,65 @@ private struct SwipeToDecide<Content: View>: View {
 /// is without opening anything.
 struct WeekPlan: View {
     let days: [(date: Date, allDay: [String], events: [PlanItem])]
+    /// Tap a day to see all of it.
+    var open: (Date) -> Void = { _ in }
 
     var body: some View {
         VStack(spacing: 0) {
             ForEach(Array(days.enumerated()), id: \.offset) { index, day in
-                HStack(alignment: .top, spacing: 14) {
-                    date(day.date)
-                    if day.events.isEmpty, day.allDay.isEmpty {
-                        Text("Free")
-                            .font(.subheadline)
-                            .foregroundStyle(.tertiary)
-                            .padding(.top, 6)
-                        Spacer(minLength: 0)
-                    } else {
-                        VStack(alignment: .leading, spacing: 6) {
-                            ForEach(day.allDay, id: \.self) { title in
-                                Text(title)                       // holidays and birthdays
-                                    .font(.subheadline)
-                                    .lineLimit(1)
-                                    .foregroundStyle(.secondary)
-                            }
-                            ForEach(day.events.prefix(3)) { event in
-                                HStack(spacing: 8) {
-                                    RoundedRectangle(cornerRadius: 2)
-                                        .fill(event.color)
-                                        .frame(width: 3, height: 15)
-                                    Text(event.title).font(.subheadline).lineLimit(1)
-                                    Spacer(minLength: 0)
-                                    Text(event.start, format: .dateTime.hour().minute())
-                                        .font(.caption.monospacedDigit())
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                            if day.events.count > 3 {
-                                Text("+\(day.events.count - 3) more")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        .padding(.vertical, 4)
-                    }
-                }
-                .padding(.vertical, 9)
+                Button { open(day.date) } label: { row(day) }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Shows the whole day")
                 if index < days.count - 1 { Divider() }
             }
         }
         .dashboardCard()
+    }
+
+    private func row(_ day: (date: Date, allDay: [String], events: [PlanItem])) -> some View {
+        HStack(alignment: .top, spacing: 14) {
+            date(day.date)
+            if day.events.isEmpty, day.allDay.isEmpty {
+                Text("Free")
+                    .font(.subheadline)
+                    .foregroundStyle(.tertiary)
+                    .padding(.top, 6)
+                Spacer(minLength: 0)
+            } else {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(day.allDay, id: \.self) { title in
+                        Text(title)                       // holidays and birthdays
+                            .font(.subheadline)
+                            .lineLimit(1)
+                            .foregroundStyle(.secondary)
+                    }
+                    ForEach(day.events.prefix(3)) { event in
+                        HStack(spacing: 8) {
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(event.color)
+                                .frame(width: 3, height: 15)
+                            Text(event.title).font(.subheadline).lineLimit(1)
+                            Spacer(minLength: 0)
+                            Text(event.start, format: .dateTime.hour().minute())
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    if day.events.count > 3 {
+                        Text("+\(day.events.count - 3) more")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tertiary)
+                .padding(.top, 8)
+        }
+        .padding(.vertical, 9)
+        .contentShape(.rect)
     }
 
     private func date(_ day: Date) -> some View {

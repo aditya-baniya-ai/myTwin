@@ -41,6 +41,8 @@ struct ContentView: View {
 
     @State private var tab: TwinTab = .twin
     @State private var planSpan: PlanSpan = .day
+    /// A day picked in the week, shown in full.
+    @State private var weekDay: Date?
     @State private var pro = Subscription()
     @State private var showPaywall = false
     @State private var askedLocked = false
@@ -533,8 +535,11 @@ struct ContentView: View {
             if canRescue {
                 Button("Rescue my day", systemImage: "wand.and.stars") { openRescue() }.buttonStyle(.borderedProminent)
             }
-            if planSpan == .day { plan } else { weekPlan }
+            if planSpan == .day { plan }
+            else if let weekDay { fullDay(weekDay) }
+            else { weekPlan }
         }
+        .onChange(of: planSpan) { weekDay = nil }
     }
 
     /// Tomorrow's goals: written by anyone, planned into the calendar with Pro.
@@ -581,7 +586,27 @@ struct ContentView: View {
             return (day, onThatDay.filter(\.isAllDay).map { $0.title ?? "Untitled" },
                     DayPlanner.items(from: onThatDay))
         }
-        return WeekPlan(days: week)
+        return WeekPlan(days: week) { day in
+            withAnimation(.snappy) {
+                if days.isDateInToday(day) { planSpan = .day } else { weekDay = day }
+            }
+        }
+    }
+
+    /// Every event on a day picked in the week, laid out like today. No suggestions: they
+    /// come from today's forecast, and other days have none.
+    private func fullDay(_ day: Date) -> some View {
+        let events = calendar.week.filter { Calendar.current.isDate($0.startDate, inSameDayAs: day) }
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Button("Week", systemImage: "chevron.left") { withAnimation(.snappy) { weekDay = nil } }
+                Spacer()
+                Text(day, format: .dateTime.weekday(.wide).month().day()).font(.headline)
+            }
+            SmartCalendar(allDay: events.filter(\.isAllDay).map { $0.title ?? "Untitled" },
+                          items: DayPlanner.items(from: events), now: planningNow,
+                          emptyText: "Nothing on your calendar.")
+        }
     }
 
     /// What myTwin is connected to and what it can actually read.

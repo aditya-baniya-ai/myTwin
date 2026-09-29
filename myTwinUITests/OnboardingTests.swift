@@ -110,6 +110,31 @@ final class OnboardingTests: XCTestCase {
         XCTAssertFalse(app.staticTexts["Demo · fictional data · 2 PM"].exists)
     }
 
+    /// In Week, tap a day to see all of it laid out like today, then go back.
+    @MainActor func testWeekDayOpensInFull() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--sample-day"]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Demo · fictional data · 2 PM"].waitForExistence(timeout: 30))
+        dismissNudge(app)
+        open("Plan", in: app)
+        app.buttons["Week"].firstMatch.tap()
+
+        let day = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Dinner with Sam'")).firstMatch
+        XCTAssertTrue(day.waitForExistence(timeout: 5))
+        day.tap()
+        XCTAssertTrue(app.staticTexts["Dinner with Sam"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Team standup"].exists)
+        XCTAssertTrue(app.staticTexts["Mom's birthday"].exists, "all-day events too")
+        XCTAssertFalse(app.staticTexts["SUGGESTED"].exists, "no suggestions on other days")
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "Week day in full"; shot.lifetime = .keepAlways; add(shot)
+
+        app.buttons["Week"].firstMatch.tap()
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS 'Farmers market'")).firstMatch
+            .waitForExistence(timeout: 5), "back to the week")
+    }
+
     /// Write a goal for tomorrow and let Pro plan it into the (demo) calendar.
     @MainActor func testTomorrowGoalsArePlanned() {
         let app = XCUIApplication()
