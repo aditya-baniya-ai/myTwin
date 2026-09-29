@@ -135,6 +135,29 @@ final class OnboardingTests: XCTestCase {
             .waitForExistence(timeout: 5), "back to the week")
     }
 
+    /// Add a goal to today after the day has begun, and tick it off.
+    @MainActor func testAddAGoalForToday() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--sample-day"]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Demo · fictional data · 2 PM"].waitForExistence(timeout: 30))
+        dismissNudge(app)
+        open("Tomorrow", in: app)
+
+        let field = app.textFields["Add a goal for today"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        field.typeText("Call the bank, 15 min\n")
+        let goal = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Call the bank'")).firstMatch
+        XCTAssertTrue(goal.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Say today's goals"].exists)
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Add a length'")).firstMatch.exists,
+                       "the hint line is gone")
+        goal.tap()                                         // return already put the keyboard away
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "Goal added for today"; shot.lifetime = .keepAlways; add(shot)
+    }
+
     /// Write a goal for tomorrow and let Pro plan it into the (demo) calendar.
     @MainActor func testTomorrowGoalsArePlanned() {
         let app = XCUIApplication()

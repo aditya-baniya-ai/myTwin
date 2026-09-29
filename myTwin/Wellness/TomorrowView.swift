@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Tomorrow's goals, written tonight: a box to type them, what myTwin read from it, and
 /// with Pro a button that plans them into tomorrow's calendar. Above it, today's goals to
-/// tick off, and anything unfinished carried over.
+/// tick off or add to, and anything unfinished carried over.
 struct TomorrowView: View {
     let book: GoalBook
     let calendar: CalendarManager
@@ -15,14 +15,19 @@ struct TomorrowView: View {
     @State private var text = ""
     @State private var result: String?
     @State private var askedForNotifications = false
-    /// Turning what you said into goal lines.
+    /// The day you're saying goals for, today or tomorrow, and whether what you said is
+    /// still being turned into goal lines.
+    @State private var speakingFor: String?
     @State private var hearing = false
+    /// A goal being typed for today.
+    @State private var todayLine = ""
     /// The planned goal whose time you're changing, and the time on the wheel.
     @State private var moving: Goal?
     @State private var newTime = Date.now
     /// Goals you moved on top of something else on your calendar.
     @State private var clashes: Set<UUID> = []
     @FocusState private var writing: Bool
+    @FocusState private var addingToday: Bool
 
     private var tomorrow: Date { Calendar.current.date(byAdding: .day, value: 1, to: now) ?? now }
     private var today: GoalBook.Day { book.day(now) }
@@ -30,7 +35,7 @@ struct TomorrowView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            if !today.goals.isEmpty { todaysGoals }
+            todaysGoals
             writeBox
             if !next.goals.isEmpty { readGoals }
             planButton
@@ -50,7 +55,7 @@ struct TomorrowView: View {
     private var todaysGoals: some View {
         let left = today.goals.filter { !$0.done && !$0.moved }
         return VStack(alignment: .leading, spacing: 10) {
-            Text("Did you finish today's goals?").font(.title3.bold())
+            Text(today.goals.isEmpty ? "Today's goals" : "Did you finish today's goals?").font(.title3.bold())
             VStack(spacing: 0) {
                 ForEach(today.goals) { goal in
                     Button { book.toggle(goal, on: now) } label: {
@@ -71,7 +76,9 @@ struct TomorrowView: View {
                     .disabled(goal.moved)
                     if goal.id != today.goals.last?.id { Divider() }
                 }
-                if left.isEmpty {
+                if today.goals.isEmpty {
+                    EmptyView()
+                } else if left.isEmpty {
                     Label("All of today's goals are done or carried over.", systemImage: "sparkles")
                         .font(.subheadline).foregroundStyle(.green).padding(.top, 8)
                 } else {
@@ -83,6 +90,7 @@ struct TomorrowView: View {
                     .padding(.top, 10)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                addToToday
             }
             .dashboardCard()
         }
@@ -107,41 +115,70 @@ struct TomorrowView: View {
                     .accessibilityLabel("Goals for tomorrow")
             }
             .dashboardCard(padding: 12)
-            speakButton
-            Text("Add a length (\"2 hrs\"), a time (\"at 3pm\") or a part of the day (\"morning\") if you like. It can differ from your calendar.")
-                .font(.caption).foregroundStyle(.secondary)
+            speakButton(for: tomorrow, title: "Say your goals")
         }
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
-                Button("Done") { writing = false }
+                Button("Done") { writing = false; addingToday = false }
             }
         }
     }
 
+    /// Something you remembered after the day began: typed, or said out loud.
+    private var addToToday: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                TextField("Add a goal for today", text: $todayLine)
+                    .focused($addingToday)
+                    .onSubmit(addTypedGoal)
+                Button("Add", systemImage: "plus.circle.fill", action: addTypedGoal)
+                    .labelStyle(.iconOnly)
+                    .font(.title2)
+                    .disabled(todayLine.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+            .padding(.top, 12)
+            speakButton(for: now, title: "Say today's goals")
+        }
+    }
+
+    private func addTypedGoal() {
+        add([todayLine], to: now)
+        todayLine = ""
+    }
+
+    /// Lines added to the end of a day's goals, keeping what's already there.
+    private func add(_ lines: [String], to day: Date) {
+        let isTomorrow = Calendar.current.isDate(day, inSameDayAs: tomorrow)
+        let kept = (isTomorrow ? text : book.day(day).text).trimmingCharacters(in: .whitespacesAndNewlines)
+        let joined = ([kept] + lines.map { $0.trimmingCharacters(in: .whitespaces) })
+            .filter { !$0.isEmpty }.joined(separator: "\n")
+        if isTomorrow { text = joined } else { book.write(joined, for: day) }
+    }
+
     /// Say your goals instead of typing them: the same recording bar as talking to Dash,
-    /// and what you said lands in the box, one goal per line.
-    @ViewBuilder private var speakButton: some View {
-        if hearing {
+    /// and what you said joins that day's goals, one per line.
+    @ViewBuilder private func speakButton(for day: Date, title: String) -> some View {
+        if speakingFor == GoalBook.name(day) && hearing {
             Label("Writing down your goals…", systemImage: "ellipsis").font(.subheadline).foregroundStyle(.secondary)
-        } else if voice.isDictating {
+        } else if speakingFor == GoalBook.name(day) && voice.isDictating {
             Label("Listening. Tap send in the bar below when you're done.", systemImage: "mic.fill")
                 .font(.subheadline).foregroundStyle(.red)
         } else {
-            Button("Say your goals", systemImage: "mic.fill") {
+            Button(title, systemImage: "mic.fill") {
                 writing = false
+                addingToday = false
+                speakingFor = GoalBook.name(day)
                 voice.startDictation { said in
                     hearing = true
                     Task {
-                        let lines = await GoalSpeech.lines(from: said)
-                        let kept = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                        text = ([kept] + lines).filter { !$0.isEmpty }.joined(separator: "\n")
+                        add(await GoalSpeech.lines(from: said), to: day)
                         hearing = false
                     }
                 }
             }
             .buttonStyle(.bordered)
-            .disabled(voice.status != .listening)
+            .disabled(voice.status != .listening || voice.isDictating || hearing)
             if voice.status != .listening {
                 Text("The microphone isn't ready. You can type instead.").font(.caption).foregroundStyle(.secondary)
             }
