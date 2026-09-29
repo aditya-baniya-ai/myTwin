@@ -56,7 +56,8 @@ struct PredictionsCard: View {
                 PointMark(x: .value("Time", peak.date), y: .value("Energy", peak.charge * 100))
                     .symbolSize(110)
                     .foregroundStyle(.green)
-                    .annotation(position: .trailing, spacing: 6, overflowResolution: .init(x: .fit(to: .chart), y: .fit(to: .chart))) {
+                    // Above the line: beside the dot, it sat on the line when the day peaks first thing.
+                    .annotation(position: .topTrailing, spacing: 4, overflowResolution: .init(x: .fit(to: .chart), y: .fit(to: .chart))) {
                         valueLabel(peak, .green)
                     }
             }

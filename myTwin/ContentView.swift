@@ -552,7 +552,7 @@ struct ContentView: View {
         page("Tomorrow", tab: .tomorrow) {
             if isSample { sampleBanner }
             TomorrowView(book: goals, calendar: calendar, voice: voice, preferences: daily.preferences,
-                         isPro: hasPro, now: planningNow, upgrade: { upgrade("Planning your goals into your calendar") }, history: signalHistory, react: show)
+                         isPro: hasPro, now: planningNow, upgrade: upgrade, history: signalHistory, react: show)
         }
     }
 

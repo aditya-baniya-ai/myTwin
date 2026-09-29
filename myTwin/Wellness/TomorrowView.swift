@@ -10,9 +10,11 @@ struct TomorrowView: View {
     let preferences: PlanningPreferences
     let isPro: Bool
     let now: Date
-    let upgrade: () -> Void
+    /// Opens the paywall, naming the Pro feature that was tapped.
+    let upgrade: (String) -> Void
     let history: [DaySignals]
-    @State private var expectedSleepHours = 8.0
+    /// Tonight's sleep as you set it for the outlook. Until you touch it, your sleep goal.
+    @State private var chosenSleep: Double?
     /// Dash reacting when today's goals are all done, or carried over.
     var react: (DashMoment) -> Void = { _ in }
 
@@ -39,13 +41,14 @@ struct TomorrowView: View {
     private var tomorrow: Date { Calendar.current.date(byAdding: .day, value: 1, to: now) ?? now }
     private var today: GoalBook.Day { book.day(now) }
     private var next: GoalBook.Day { book.day(tomorrow) }
+    private var expectedSleepHours: Double { chosenSleep ?? min(max(preferences.sleepGoal, 3), 12) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            forecastCard
             todaysGoals
             writeBox
             if !next.goals.isEmpty { readGoals }
+            forecastCard
             planButton(for: tomorrow, title: "Plan my day tomorrow", open: next.goals.count,
                        pro: "Puts each goal into tomorrow's free time, work in your strongest hours, with a reminder before each.",
                        free: "With Pro, myTwin plans these into tomorrow's calendar and reminds you.")
@@ -67,10 +70,7 @@ struct TomorrowView: View {
         .sheet(item: $editing) { goal in
             GoalEditor(goal: goal, day: now, save: saveEdit, delete: { deleteGoal(goal) })
         }
-        .onAppear {
-            text = next.text
-            expectedSleepHours = min(max(preferences.sleepGoal, 3), 12)
-        }
+        .onAppear { text = next.text }
         .onChange(of: tomorrow) { text = next.text }
         .onChange(of: isPro) { results = [:] }
         .onChange(of: text) { _, value in
@@ -162,39 +162,33 @@ struct TomorrowView: View {
                                   model: EnergyModel(), now: now)
     }
 
+    /// Worked out once per redraw: the card reads it in several places.
     private var forecastCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let outlook = self.outlook
+        return VStack(alignment: .leading, spacing: 12) {
             Label("Tomorrow’s prediction", systemImage: "sun.horizon.fill")
                 .font(.title3.bold()).foregroundStyle(.orange)
             if isPro {
-                Text(tomorrow.formatted(.dateTime.weekday(.wide).month().day()))
-                    .font(.subheadline).foregroundStyle(.secondary)
-                Stepper("Expected sleep: \(expectedSleepHours, specifier: "%.1f") hours",
-                        value: $expectedSleepHours, in: 3...12, step: 0.5)
+                Stepper("Sleep tonight: \(expectedSleepHours, specifier: "%g") hours",
+                        value: Binding(get: { expectedSleepHours }, set: { chosenSleep = $0 }), in: 3...12, step: 0.5)
                     .accessibilityIdentifier("tomorrowSleep")
-                Text("Your assumption for tonight, starting from your sleep goal. Changing it does not change your goal or health records.")
-                    .font(.caption).foregroundStyle(.secondary)
                 Text(outlook.headline).font(.headline)
                     .accessibilityIdentifier("tomorrowOutlook")
                 if let start = outlook.dayStart {
-                    Text("If you sleep \(expectedSleepHours, specifier: "%g") hours and your heart rate and sleep quality stay at their recent normal.")
-                        .font(.subheadline)
                     let wake = Calendar.current.date(bySettingHour: max(preferences.quietEnd, 6),
                                                      minute: 0, second: 0, of: tomorrow) ?? tomorrow
                     PredictionsCard(points: DayCharge.forecast(from: start, now: wake,
                                     until: preferences.bedtime(on: tomorrow), hours: 24), isTomorrow: true)
-                    Text("The hourly shape is a shared illustration, not a learned personal rhythm. These are planning estimates, not measured energy or a guarantee.")
+                    Text("A what-if estimate: assumes your heart rate and sleep quality stay at their recent normal. The hourly shape is illustrative.")
                         .font(.caption).foregroundStyle(.secondary)
                 } else {
-                    Text("Needs seven recent nights of sleep in Apple Health to compare against. You can still plan using the usual time-of-day pattern.")
+                    Text("Needs seven recent nights of sleep in Apple Health.")
                         .font(.subheadline).foregroundStyle(.secondary)
                 }
-                Text("The curve starts at your quiet-hours end. Tomorrow’s actual sleep and a fresh check-in may change the outlook. Your saved goals stay in place until you change them.")
-                    .font(.caption).foregroundStyle(.secondary)
             } else {
-                Text("Preview tomorrow from your expected sleep and recent history with myTwin Pro.")
+                Text("See how tomorrow might go, from how long you'll sleep tonight.")
                     .font(.subheadline)
-                Button("Unlock tomorrow’s prediction", action: upgrade).buttonStyle(.bordered)
+                Button("Unlock tomorrow’s prediction") { upgrade("Tomorrow’s prediction") }.buttonStyle(.bordered)
             }
         }
         .dashboardCard()
@@ -347,7 +341,7 @@ struct TomorrowView: View {
         let result = results[GoalBook.name(day)]
         return VStack(alignment: .leading, spacing: 8) {
             Button {
-                isPro ? plan(day) : upgrade()
+                isPro ? plan(day) : upgrade("Planning your goals into your calendar")
             } label: {
                 Label(title, systemImage: isPro ? "wand.and.stars" : "lock.fill")
                     .font(.headline).frame(maxWidth: .infinity)

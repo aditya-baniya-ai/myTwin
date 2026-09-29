@@ -14,6 +14,7 @@ final class TomorrowForecastUITests: XCTestCase {
         XCTAssertFalse(outlook.label.contains("Still learning"))
         let sleep = app.steppers["tomorrowSleep"]
         XCTAssertTrue(sleep.exists)
+        for _ in 0..<6 where !sleep.isHittable { app.swipeUp(velocity: .slow) }   // below the goals
         let initial = XCTAttachment(screenshot: app.screenshot())
         initial.name = "Tomorrow prediction"
         initial.lifetime = .keepAlways
@@ -34,7 +35,14 @@ final class TomorrowForecastUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Demo · fictional data · 2 PM"].waitForExistence(timeout: 30))
         if dismiss.waitForExistence(timeout: 5) { dismiss.tap() }
         app.buttons["Tomorrow"].tap()
-        XCTAssertTrue(app.buttons["Unlock tomorrow’s prediction"].waitForExistence(timeout: 5))
+        let unlock = app.buttons["Unlock tomorrow’s prediction"]
+        XCTAssertTrue(unlock.waitForExistence(timeout: 5))
         XCTAssertFalse(app.steppers["tomorrowSleep"].exists)
+        for _ in 0..<6 where !unlock.isHittable { app.swipeUp(velocity: .slow) }
+        unlock.tap()
+        XCTAssertTrue(app.staticTexts["Part of myTwin Pro"].waitForExistence(timeout: 10))
+        XCTAssertGreaterThanOrEqual(app.staticTexts.matching(identifier: "Tomorrow’s prediction").count, 1,
+                                    "the paywall names the forecast, not goal planning")
+        XCTAssertFalse(app.staticTexts["Planning your goals into your calendar"].exists)
     }
 }
