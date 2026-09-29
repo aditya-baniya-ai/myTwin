@@ -184,6 +184,27 @@ final class OnboardingTests: XCTestCase {
         planned.name = "Today planned"; planned.lifetime = .keepAlways; add(planned)
     }
 
+    /// Ticking off the last of today's goals brings Dash up to celebrate.
+    @MainActor func testDashCelebratesTheLastGoal() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--sample-day"]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Demo · fictional data · 2 PM"].waitForExistence(timeout: 30))
+        dismissNudge(app)
+        open("Tomorrow", in: app)
+
+        for goal in ["Finish the lit review draft", "Email Professor Lee", "Call mom", "Grocery run"] {
+            let tick = app.buttons["Tick off \(goal)"]
+            XCTAssertTrue(tick.waitForExistence(timeout: 5), goal)
+            tick.tap()
+        }
+        let cheer = app.staticTexts["All of today's goals done. That's a good day."]
+        XCTAssertTrue(cheer.waitForExistence(timeout: 5))
+        sleep(2)                                           // mid-jump
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "Dash celebrates"; shot.lifetime = .keepAlways; add(shot)
+    }
+
     /// Write a goal for tomorrow and let Pro plan it into the (demo) calendar.
     @MainActor func testTomorrowGoalsArePlanned() {
         let app = XCUIApplication()

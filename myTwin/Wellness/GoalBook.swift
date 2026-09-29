@@ -8,6 +8,9 @@ final class GoalBook {
         var text = ""
         var goals: [Goal] = []
         var planned = false
+
+        /// Every goal ticked off or carried over, and at least one of them done.
+        var finished: Bool { goals.contains(where: \.done) && goals.allSatisfy { $0.done || $0.moved } }
     }
 
     private(set) var days: [String: Day]

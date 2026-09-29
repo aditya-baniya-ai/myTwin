@@ -11,6 +11,8 @@ struct TomorrowView: View {
     let isPro: Bool
     let now: Date
     let upgrade: () -> Void
+    /// Dash reacting when today's goals are all done, or carried over.
+    var react: (DashMoment) -> Void = { _ in }
 
     @State private var text = ""
     /// What the last plan or move did, for each day.
@@ -82,7 +84,7 @@ struct TomorrowView: View {
                 ForEach(today.goals) { goal in
                     HStack(spacing: 12) {
                         // The circle ticks it off; the name opens it for editing.
-                        Button { book.toggle(goal, on: now) } label: {
+                        Button { tick(goal) } label: {
                             Image(systemName: goal.done ? "checkmark.circle.fill" : goal.moved ? "arrow.turn.down.right" : "circle")
                                 .font(.title3)
                                 .foregroundStyle(goal.done ? .green : .secondary)
@@ -130,6 +132,7 @@ struct TomorrowView: View {
                     Button("Move \(left.count) unfinished to tomorrow", systemImage: "arrow.uturn.forward") {
                         book.moveUnfinished(from: now)
                         text = next.text
+                        react(.carriedOver)
                     }
                     .buttonStyle(.bordered)
                     .padding(.top, 10)
@@ -357,6 +360,13 @@ struct TomorrowView: View {
         guard !book.isDemo, Calendar.current.isDate(start, inSameDayAs: tomorrow) else { return }
         let planned = next.goals.compactMap { goal in goal.scheduled.map { (goal: goal, start: $0) } }
         Task { await GoalNotifications.morning(for: tomorrow, goals: planned, wake: preferences.quietEnd) }
+    }
+
+    /// Ticks a goal on or off. The tick that finishes the day gets a jump from Dash.
+    private func tick(_ goal: Goal) {
+        let before = today.finished
+        book.toggle(goal, on: now)
+        if !before && today.finished { react(.allDone) }
     }
 
     /// Saves an edited goal of today's, and changes its calendar event to match if it has one.

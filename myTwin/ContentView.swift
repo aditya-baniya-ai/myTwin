@@ -29,6 +29,8 @@ struct ContentView: View {
     @State private var stepPace: StepPace?
     @State private var demoStepLog = StepCheck.Log()
     @State private var goals: GoalBook
+    /// Dash acting out how today's goals went, over any page.
+    @State private var moment: DashMoment?
 
     @Environment(\.scenePhase) private var scenePhase
     @State private var health: HealthManager
@@ -547,7 +549,7 @@ struct ContentView: View {
         page("Tomorrow", tab: .tomorrow) {
             if isSample { sampleBanner }
             TomorrowView(book: goals, calendar: calendar, voice: voice, preferences: daily.preferences,
-                         isPro: hasPro, now: planningNow, upgrade: { showPaywall = true })
+                         isPro: hasPro, now: planningNow, upgrade: { showPaywall = true }, react: show)
         }
     }
 
@@ -936,6 +938,10 @@ struct ContentView: View {
                              cancel: voice.cancelDictation, send: voice.finishDictation)
                     .padding(.horizontal, 16)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else if let moment {
+                DashMomentCard(moment: moment, energy: charge * 100) { withAnimation(.snappy) { self.moment = nil } }
+                    .padding(.horizontal, 16)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             } else if chat.isResponding || calendar.pendingChange != nil {
                 InlineConversation(isThinking: chat.isResponding, change: calendar.pendingChange,
                                    confirm: chat.confirmChange, cancel: chat.cancelChange)
@@ -1194,6 +1200,16 @@ struct ContentView: View {
         _ = await StepCheck.run(health: health, calendar: calendar, preferences: preferences,
                                 now: planningNow, log: &log, notify: !isSample)
         if isSample { demoStepLog = log } else { log.save() }
+    }
+
+    /// Dash pops up, acts it out and says it, then goes after a few seconds.
+    private func show(_ moment: DashMoment) {
+        withAnimation(.snappy) { self.moment = moment }
+        voice.speak(moment.line)
+        Task {
+            try? await Task.sleep(for: .seconds(6))
+            if self.moment?.id == moment.id { withAnimation(.snappy) { self.moment = nil } }
+        }
     }
 
     /// Takes Dash up on it: asks him the follow-up in the user's words. It isn't counted

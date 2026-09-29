@@ -166,6 +166,24 @@ final class GoalsTests: XCTestCase {
         XCTAssertTrue(goals[1].done, "the tick on another goal survives too")
     }
 
+    /// Dash jumps when the day is finished: everything ticked or carried over, and at least
+    /// one thing actually done.
+    func testWhenADayIsFinished() {
+        var day = GoalBook.Day(goals: GoalParser.parse("Gym\nRead\nCall mom"))
+        XCTAssertFalse(day.finished, "nothing done yet")
+        day.goals[0].done = true
+        day.goals[1].done = true
+        XCTAssertFalse(day.finished, "one still open")
+        day.goals[2].moved = true
+        XCTAssertTrue(day.finished)
+        day.goals[0].done = false
+        day.goals[1].done = false
+        day.goals[0].moved = true
+        day.goals[1].moved = true
+        XCTAssertFalse(day.finished, "all carried over is not a finished day")
+        XCTAssertFalse(GoalBook.Day().finished, "nor is an empty one")
+    }
+
     @MainActor func testDemoKeepsItsGoalsInMemory() async {
         let book = GoalBook(demo: true)
         XCTAssertFalse(book.day(SampleDay.now).goals.isEmpty)

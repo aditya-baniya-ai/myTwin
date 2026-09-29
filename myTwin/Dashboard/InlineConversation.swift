@@ -161,6 +161,40 @@ struct NudgeCard: View {
     }
 }
 
+/// Dash reacting to how today's goals went. A new one each time, so it replays.
+struct DashMoment: Identifiable, Equatable {
+    let id = UUID()
+    let line: String
+    let clip: String
+
+    static var allDone: DashMoment { .init(line: "All of today's goals done. That's a good day.", clip: "jump") }
+    static var carriedOver: DashMoment { .init(line: "Moved to tomorrow. It'll be a fresh start.", clip: "stretch") }
+}
+
+/// Dash himself, over whichever page you're on, acting out a `DashMoment`. Tap to close.
+struct DashMomentCard: View {
+    let moment: DashMoment
+    let energy: Double
+    let dismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Avatar3DView(energy: energy, gesture: AvatarGesture.all.first { $0.clip == moment.clip })
+                .frame(width: 110, height: 150)
+                .allowsHitTesting(false)
+            Text(moment.line)
+                .font(.headline)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.trailing, 14)
+        .background(.regularMaterial, in: .rect(cornerRadius: 22))
+        .shadow(color: .black.opacity(0.3), radius: 16, y: 6)
+        .onTapGesture(perform: dismiss)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+    }
+}
+
 #Preview("Listening") {
     DictationBar(level: 0.6, since: .now.addingTimeInterval(-2), cancel: {}, send: {})
         .padding()

@@ -53,6 +53,7 @@ struct Avatar3DView: View {
                 content.add(light)
             }
             controller.show(state)
+            if let gesture { controller.perform(gesture.clip) }   // asked for before he was ready
             controller.frameUpdates = content.subscribe(to: SceneEvents.Update.self) { [weak controller] event in
                 controller?.advance(by: event.deltaTime)
             }
