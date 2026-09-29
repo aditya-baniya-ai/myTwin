@@ -47,6 +47,8 @@ struct ContentView: View {
     @State private var weekDay: Date?
     @State private var pro = Subscription()
     @State private var showPaywall = false
+    /// What you tapped that's part of Pro, named at the top of the paywall.
+    @State private var paywallReason: String?
     @State private var askedLocked = false
     @State private var showCustomerCentre = false
     @State private var showShowcase = false
@@ -185,7 +187,8 @@ struct ContentView: View {
             let resumeRescue = pendingRescue && hasPro
             pendingRescue = false
             if resumeRescue { showRescue = true }
-        }) { ProPaywall(pro: pro) }
+            paywallReason = nil
+        }) { ProPaywall(pro: pro, reason: paywallReason) }
         .sheet(isPresented: $showPreferences) {
             PlanningPreferencesView(preferences: daily.preferences) { value in
                 daily.savePreferences(value)
@@ -297,7 +300,7 @@ struct ContentView: View {
                 } else {
                     LockedCard(title: "Your energy, hour by hour",
                                detail: "See where your peak lands and when the dip hits, before the day starts.") {
-                        showPaywall = true
+                        upgrade("Your energy, hour by hour")
                     }
                 }
 
@@ -328,7 +331,7 @@ struct ContentView: View {
             if !fullAccess {
                 LockedCard(title: "Plans that fit your day",
                            detail: "A workout in your strongest free hour, a nap at the dip, the last coffee that still clears before bed.") {
-                    showPaywall = true
+                    upgrade("Plans that fit your day")
                 }
             }
             VStack(spacing: 12) {
@@ -447,7 +450,7 @@ struct ContentView: View {
             } else {
                 LockedCard(title: "Your energy, hour by hour",
                            detail: "See where your peak lands and when the dip hits, before the day starts.") {
-                    showPaywall = true
+                    upgrade("Your energy, hour by hour")
                 }
             }
             Button("Why this plan?", systemImage: "info.circle") { showExplanation = true }
@@ -507,7 +510,7 @@ struct ContentView: View {
             .dashboardCard()
         }
         .alert("Buy premium to use this feature.", isPresented: $askedLocked) {
-            Button("See myTwin Pro") { showPaywall = true }
+            Button("See myTwin Pro") { upgrade("Dash's answers to your questions") }
             Button("Not now", role: .cancel) {}
         } message: {
             Text("With Pro, Dash answers these for you and keeps the answers here.")
@@ -549,7 +552,7 @@ struct ContentView: View {
         page("Tomorrow", tab: .tomorrow) {
             if isSample { sampleBanner }
             TomorrowView(book: goals, calendar: calendar, voice: voice, preferences: daily.preferences,
-                         isPro: hasPro, now: planningNow, upgrade: { showPaywall = true }, react: show)
+                         isPro: hasPro, now: planningNow, upgrade: { upgrade("Planning your goals into your calendar") }, react: show)
         }
     }
 
@@ -1063,9 +1066,14 @@ struct ContentView: View {
             if let planningProblem { Text(planningProblem).foregroundStyle(.red).font(.footnote) }
         }
     }
+    /// Opens the paywall, naming the Pro feature you just tapped.
+    private func upgrade(_ feature: String) {
+        paywallReason = feature
+        showPaywall = true
+    }
     private func openRescue() {
         if canRescue { showRescue = true }
-        else { pendingRescue = true; showPaywall = true }
+        else { pendingRescue = true; upgrade("Rescue my day") }
     }
     private func recordCheckIn(_ value: ReportedEnergy) {
         withAnimation(.snappy) { daily.report(value, now: planningNow) }
@@ -1073,7 +1081,7 @@ struct ContentView: View {
         // A check-in changes recommendations, not the measured sleep or plotted battery.
     }
     private func acceptSuggestion(_ item: PlanItem) {
-        guard fullAccess else { showPaywall = true; return }
+        guard fullAccess else { upgrade("Adding suggestions to your calendar"); return }
         let action = PlannedAction(movement: item.movement ?? .rest, title: item.title,
                                    start: item.start, end: item.end, reportedEnergy: daily.currentCheckIn,
                                    tracksOutcome: item.movement != nil)

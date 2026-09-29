@@ -10,9 +10,32 @@ import SwiftUI
 /// which is why it's deprecated.
 struct ProPaywall: View {
     let pro: Subscription
+    /// The Pro feature you tapped to get here, if any, named above the paywall.
+    var reason: String? = nil
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
+        VStack(spacing: 0) {
+            if let reason {
+                HStack(spacing: 10) {
+                    Image(systemName: "lock.open.fill").font(.title3)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(reason).font(.subheadline.weight(.semibold))
+                        Text("Part of myTwin Pro").font(.caption)
+                    }
+                }
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .padding(.horizontal, 16)
+                .background(LinearGradient(colors: BrandTitle.brand, startPoint: .leading, endPoint: .trailing))
+                .accessibilityElement(children: .combine)
+            }
+            paywall
+        }
+    }
+
+    @ViewBuilder private var paywall: some View {
         if let offering = pro.offering, offering.hasPaywall {
             // The dashboard's paywall doesn't close itself, so it lands you back where
             // you were, the same way myTwin's own does.

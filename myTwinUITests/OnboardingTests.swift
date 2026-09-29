@@ -184,6 +184,26 @@ final class OnboardingTests: XCTestCase {
         planned.name = "Today planned"; planned.lifetime = .keepAlways; add(planned)
     }
 
+    /// A locked feature opens the paywall with that feature named at the top.
+    @MainActor func testPaywallNamesWhatWasLocked() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--demo-free"]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Demo · fictional data · 2 PM"].waitForExistence(timeout: 30))
+        dismissNudge(app)
+        open("Tomorrow", in: app)
+
+        let plan = app.buttons["Plan the rest of today"]
+        XCTAssertTrue(plan.waitForExistence(timeout: 5))
+        for _ in 0..<4 where !plan.isHittable { app.swipeUp(velocity: .slow) }
+        plan.tap()
+        XCTAssertTrue(app.staticTexts["Planning your goals into your calendar"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Part of myTwin Pro"].exists)
+        sleep(3)                                           // the dashboard's paywall loading in
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "Paywall names the feature"; shot.lifetime = .keepAlways; add(shot)
+    }
+
     /// Ticking off the last of today's goals brings Dash up to celebrate.
     @MainActor func testDashCelebratesTheLastGoal() {
         let app = XCUIApplication()
