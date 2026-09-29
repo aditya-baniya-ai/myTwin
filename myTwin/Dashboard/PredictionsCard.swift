@@ -6,6 +6,7 @@ import SwiftUI
 /// the curve measured from thousands of real check-ins.
 struct PredictionsCard: View {
     let points: [EnergyPoint]
+    var isTomorrow = false
 
     private var peak: EnergyPoint? { points.max { $0.charge < $1.charge } }
 
@@ -24,13 +25,13 @@ struct PredictionsCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             if points.count < 3 {
-                Label("It's nearly bedtime. Tomorrow's forecast appears in the morning.", systemImage: "moon.stars")
+                Label(isTomorrow ? "Choose a longer waking window in your preferences to see tomorrow’s curve." : "It's nearly bedtime. Tomorrow's forecast appears in the morning.", systemImage: "moon.stars")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             } else {
                 chart.frame(height: 150)
                 HStack(spacing: 10) {
-                    if let peak { moment("Peak focus", peak, symbol: "bolt.fill", tint: .green) }
+                    if let peak { moment(isTomorrow ? "Estimated peak" : "Peak focus", peak, symbol: "bolt.fill", tint: .green) }
                     if let dip { moment("Likely dip", dip, symbol: "arrow.down.right", tint: .orange) }
                 }
             }
@@ -97,7 +98,7 @@ struct PredictionsCard: View {
             Label(label, systemImage: symbol)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(tint)
-            Text(point.date == points.first?.date ? "Now" : point.date.formatted(date: .omitted, time: .shortened))
+            Text(!isTomorrow && point.date == points.first?.date ? "Now" : point.date.formatted(date: .omitted, time: .shortened))
                 .font(.headline)
             Text("\(Int(point.charge * 100))% charged")
                 .font(.caption)

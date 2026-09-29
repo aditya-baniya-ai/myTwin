@@ -11,6 +11,8 @@ struct TomorrowView: View {
     let isPro: Bool
     let now: Date
     let upgrade: () -> Void
+    let history: [DaySignals]
+    @State private var expectedSleepHours = 8.0
     /// Dash reacting when today's goals are all done, or carried over.
     var react: (DashMoment) -> Void = { _ in }
 
@@ -40,6 +42,7 @@ struct TomorrowView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
+            forecastCard
             todaysGoals
             writeBox
             if !next.goals.isEmpty { readGoals }
@@ -64,7 +67,10 @@ struct TomorrowView: View {
         .sheet(item: $editing) { goal in
             GoalEditor(goal: goal, day: now, save: saveEdit, delete: { deleteGoal(goal) })
         }
-        .onAppear { text = next.text }
+        .onAppear {
+            text = next.text
+            expectedSleepHours = min(max(preferences.sleepGoal, 3), 12)
+        }
         .onChange(of: tomorrow) { text = next.text }
         .onChange(of: isPro) { results = [:] }
         .onChange(of: text) { _, value in
@@ -150,6 +156,50 @@ struct TomorrowView: View {
     }
 
     // MARK: - Tomorrow
+
+    private var outlook: TomorrowForecast {
+        TomorrowForecast.estimate(expectedSleepHours: expectedSleepHours, history: history,
+                                  model: EnergyModel(), now: now)
+    }
+
+    private var forecastCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Tomorrow’s prediction", systemImage: "sun.horizon.fill")
+                .font(.title3.bold()).foregroundStyle(.orange)
+            if isPro {
+                Text(tomorrow.formatted(.dateTime.weekday(.wide).month().day()))
+                    .font(.subheadline).foregroundStyle(.secondary)
+                Stepper("Expected sleep: \(expectedSleepHours, specifier: "%.1f") hours",
+                        value: $expectedSleepHours, in: 3...12, step: 0.5)
+                    .accessibilityIdentifier("tomorrowSleep")
+                Text("Your assumption for tonight, starting from your sleep goal. Changing it does not change your goal or health records.")
+                    .font(.caption).foregroundStyle(.secondary)
+                Text(outlook.headline).font(.headline)
+                    .accessibilityIdentifier("tomorrowOutlook")
+                if let start = outlook.dayStart {
+                    Text("Based on past model estimates after \(outlook.comparableNights) nights within one hour of this sleep length.")
+                        .font(.subheadline)
+                    let wake = Calendar.current.date(bySettingHour: max(preferences.quietEnd, 6),
+                                                     minute: 0, second: 0, of: tomorrow) ?? tomorrow
+                    PredictionsCard(points: DayCharge.forecast(from: start, now: wake,
+                                    until: preferences.bedtime(on: tomorrow), hours: 24), isTomorrow: true)
+                    Text("The hourly shape is a shared illustration, not a learned personal rhythm. These are planning estimates, not measured energy or a guarantee.")
+                        .font(.caption).foregroundStyle(.secondary)
+                } else {
+                    Text("Found \(outlook.comparableNights) comparable nights with enough earlier history. At least 3 are needed. You can still plan using the usual time-of-day pattern.")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                }
+                Text("The curve starts at your quiet-hours end. Tomorrow’s actual sleep and a fresh check-in may change the outlook. Your saved goals stay in place until you change them.")
+                    .font(.caption).foregroundStyle(.secondary)
+            } else {
+                Text("Preview tomorrow from your expected sleep and recent history with myTwin Pro.")
+                    .font(.subheadline)
+                Button("Unlock tomorrow’s prediction", action: upgrade).buttonStyle(.bordered)
+            }
+        }
+        .dashboardCard()
+    }
+
 
     private var writeBox: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -322,7 +372,8 @@ struct TomorrowView: View {
         let open = goals.filter { !$0.done }
         let kept = open.filter { $0.scheduled != nil }.count
         let times = GoalPlanner.plan(goals, on: day, busy: calendar.busy(on: day), wake: preferences.quietEnd,
-                                     bedtime: preferences.bedtime(on: day), notBefore: now)
+                                     bedtime: preferences.bedtime(on: day), notBefore: now,
+                                     dayStart: isTomorrow ? outlook.dayStart ?? DayCharge.unknownDay : DayCharge.unknownDay)
         let placed = goals.compactMap { goal in times[goal.id].map { (goal: goal, start: $0) } }
         let saved = calendar.placeGoals(placed, on: day)
         book.schedule(times, on: day)

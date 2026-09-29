@@ -620,3 +620,18 @@ Training data is not in this repository: PMData is CC BY-NC and belongs to its a
 ## Licence
 
 MIT. See [LICENSE](LICENSE).
+
+## Tomorrow’s prediction
+
+The Tomorrow tab includes a Pro preview before you plan your goals. Adjust expected
+sleep for tonight (initially your chosen sleep goal). Dash compares that assumption
+with nights in the last 60 days whose sleep duration was within one hour. Each
+comparison replays the existing energy model using only that day's earlier history.
+At least three eligible nights are required; otherwise it shows “Still learning.”
+
+The outlook uses the median of those historical model starting estimates. It is an
+exploratory analogy, not a validated next-day predictor, and it does not infer future
+heart rate or sleep stages. The hourly shape remains the shared illustrative curve.
+Tomorrow's goal planner uses that starting estimate when available; this changes the
+curve's level, not the ranking of its peak hours. Saved goals do not automatically move
+when expected sleep changes. Nothing is written to HealthKit by this preview.
