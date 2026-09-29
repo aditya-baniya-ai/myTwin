@@ -156,6 +156,16 @@ final class OnboardingTests: XCTestCase {
         goal.tap()                                         // return already put the keyboard away
         let shot = XCTAttachment(screenshot: app.screenshot())
         shot.name = "Goal added for today"; shot.lifetime = .keepAlways; add(shot)
+
+        // With Pro, the rest go into today's calendar, after 2 PM, with times you can change.
+        let plan = app.buttons["Plan the rest of today"]
+        for _ in 0..<4 where !plan.isHittable { app.swipeUp(velocity: .slow) }
+        plan.tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Planned' AND label CONTAINS 'into today'"))
+            .firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH '7:00'")).firstMatch.exists, "Call mom at 7pm")
+        let planned = XCTAttachment(screenshot: app.screenshot())
+        planned.name = "Today planned"; planned.lifetime = .keepAlways; add(planned)
     }
 
     /// Write a goal for tomorrow and let Pro plan it into the (demo) calendar.

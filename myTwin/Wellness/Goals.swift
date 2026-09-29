@@ -142,12 +142,15 @@ enum GoalParser {
 
 /// Puts a day's goals into its free time: times already set stay where they are, then named
 /// times, then work in your strongest hours, then personal goals, later in the day where
-/// there's room.
+/// there's room. Nothing new goes before `notBefore`, so planning today never uses the past.
 enum GoalPlanner {
     static func plan(_ goals: [Goal], on day: Date, busy: [DateInterval], wake: Int, bedtime: Date,
-                     dayStart: Double = DayCharge.unknownDay) -> [UUID: Date] {
+                     notBefore: Date? = nil, dayStart: Double = DayCharge.unknownDay) -> [UUID: Date] {
         let calendar = Calendar.current
-        let open = calendar.date(bySettingHour: max(wake, 6), minute: 0, second: 0, of: day) ?? day
+        let quarter = 15.0 * 60
+        let earliest = notBefore.map { Date(timeIntervalSinceReferenceDate: ($0.timeIntervalSinceReferenceDate / quarter).rounded(.up) * quarter) }
+        let wakeUp = calendar.date(bySettingHour: max(wake, 6), minute: 0, second: 0, of: day) ?? day
+        let open = max(wakeUp, earliest ?? wakeUp)
         let close = bedtime.addingTimeInterval(-3600)
         var taken = busy
         var placed: [UUID: Date] = [:]
@@ -159,7 +162,7 @@ enum GoalPlanner {
             placed[goal.id] = start
             taken.append(DateInterval(start: start, duration: Double(goal.minutes) * 60))
         }
-        let slots = stride(from: open, to: close, by: 15 * 60).map { $0 }
+        let slots = stride(from: open, to: close, by: quarter).map { $0 }
 
         let order = goals.filter { !$0.done }.sorted { a, b in
             let rank = { (g: Goal) in g.hour != nil ? 0 : g.kind == .professional ? 1 : 2 }
@@ -167,7 +170,8 @@ enum GoalPlanner {
         }
         // A time set by an earlier plan, or by you, is kept: planning again only fills in
         // the goals that don't have one yet.
-        for goal in order { if let start = goal.scheduled { take(goal, start) } }
+        // Done ones too, so their events stay on the calendar as a record.
+        for goal in goals { if let start = goal.scheduled { take(goal, start) } }
         for goal in order where goal.scheduled == nil {
             if let hour = goal.hour,
                let start = calendar.date(bySettingHour: hour, minute: goal.minute ?? 0, second: 0, of: day) {

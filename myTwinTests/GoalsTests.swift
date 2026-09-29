@@ -71,6 +71,24 @@ final class GoalsTests: XCTestCase {
         XCTAssertFalse(bank < at(17) && bank.addingTimeInterval(1800) > at(15), "around the kept ones")
     }
 
+    /// Planning today starts from now, on the quarter hour, and a named time already past
+    /// can't be kept.
+    func testPlanningTodayNeverUsesThePast() {
+        let goals = GoalParser.parse("Write the report 1 hr\nStandup at 9am")
+        let times = GoalPlanner.plan(goals, on: at(0), busy: [], wake: 8, bedtime: at(23), notBefore: at(14, 7))
+        XCTAssertEqual(times[goals[0].id], at(14, 15), "the next quarter hour after 2:07")
+        XCTAssertNil(times[goals[1].id], "9 AM has gone")
+    }
+
+    func testDoneGoalsKeepTheirTimes() {
+        var goals = GoalParser.parse("Gym 45 min\nRead 30 min")
+        goals[0].done = true
+        goals[0].scheduled = at(9)
+        let times = GoalPlanner.plan(goals, on: at(0), busy: [], wake: 8, bedtime: at(23), notBefore: at(14))
+        XCTAssertEqual(times[goals[0].id], at(9), "its event stays on the calendar")
+        XCTAssertNotNil(times[goals[1].id])
+    }
+
     // MARK: Keeping them
 
     @MainActor func testTicksSurviveEditsAndUnfinishedMoveOn() async {

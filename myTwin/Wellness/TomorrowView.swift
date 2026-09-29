@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Tomorrow's goals, written tonight: a box to type them, what myTwin read from it, and
 /// with Pro a button that plans them into tomorrow's calendar. Above it, today's goals to
-/// tick off or add to, and anything unfinished carried over.
+/// tick off, add to, and with Pro plan into the rest of today; anything unfinished carries over.
 struct TomorrowView: View {
     let book: GoalBook
     let calendar: CalendarManager
@@ -13,7 +13,8 @@ struct TomorrowView: View {
     let upgrade: () -> Void
 
     @State private var text = ""
-    @State private var result: String?
+    /// What the last plan or move did, for each day.
+    @State private var results: [String: String] = [:]
     @State private var askedForNotifications = false
     /// The day you're saying goals for, today or tomorrow, and whether what you said is
     /// still being turned into goal lines.
@@ -38,14 +39,30 @@ struct TomorrowView: View {
             todaysGoals
             writeBox
             if !next.goals.isEmpty { readGoals }
-            planButton
+            planButton(for: tomorrow, title: "Plan my day tomorrow", open: next.goals.count,
+                       pro: "Puts each goal into tomorrow's free time, work in your strongest hours, with a reminder before each.",
+                       free: "With Pro, myTwin plans these into tomorrow's calendar and reminds you.")
+        }
+        .sheet(item: $moving) { goal in
+            NavigationStack {
+                DatePicker("Start", selection: $newTime, displayedComponents: .hourAndMinute)
+                    .datePickerStyle(.wheel)
+                    .labelsHidden()
+                    .navigationTitle(goal.title)
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) { Button("Cancel") { moving = nil } }
+                        ToolbarItem(placement: .confirmationAction) { Button("Save") { move(goal, to: newTime) } }
+                    }
+            }
+            .presentationDetents([.height(300)])
         }
         .onAppear { text = next.text }
         .onChange(of: tomorrow) { text = next.text }
-        .onChange(of: isPro) { result = nil }
+        .onChange(of: isPro) { results = [:] }
         .onChange(of: text) { _, value in
             book.write(value, for: tomorrow)
-            result = nil
+            results[GoalBook.name(tomorrow)] = nil
             Task { await remind() }
         }
     }
@@ -58,22 +75,26 @@ struct TomorrowView: View {
             Text(today.goals.isEmpty ? "Today's goals" : "Did you finish today's goals?").font(.title3.bold())
             VStack(spacing: 0) {
                 ForEach(today.goals) { goal in
-                    Button { book.toggle(goal, on: now) } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: goal.done ? "checkmark.circle.fill" : goal.moved ? "arrow.turn.down.right" : "circle")
-                                .font(.title3)
-                                .foregroundStyle(goal.done ? .green : .secondary)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(goal.title).strikethrough(goal.done).foregroundStyle(goal.done ? .secondary : .primary)
-                                if goal.moved { Text("Moved to tomorrow").font(.caption).foregroundStyle(.secondary) }
+                    HStack(spacing: 12) {
+                        Button { book.toggle(goal, on: now) } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: goal.done ? "checkmark.circle.fill" : goal.moved ? "arrow.turn.down.right" : "circle")
+                                    .font(.title3)
+                                    .foregroundStyle(goal.done ? .green : .secondary)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(goal.title).strikethrough(goal.done).foregroundStyle(goal.done ? .secondary : .primary)
+                                    if goal.moved { Text("Moved to tomorrow").font(.caption).foregroundStyle(.secondary) }
+                                    clashNote(goal)
+                                }
+                                Spacer(minLength: 0)
                             }
-                            Spacer(minLength: 0)
+                            .padding(.vertical, 8)
+                            .contentShape(.rect)
                         }
-                        .padding(.vertical, 8)
-                        .contentShape(.rect)
+                        .buttonStyle(.plain)
+                        .disabled(goal.moved)
+                        if !goal.done && !goal.moved { timeButton(goal) }
                     }
-                    .buttonStyle(.plain)
-                    .disabled(goal.moved)
                     if goal.id != today.goals.last?.id { Divider() }
                 }
                 if today.goals.isEmpty {
@@ -93,6 +114,11 @@ struct TomorrowView: View {
                 addToToday
             }
             .dashboardCard()
+            if !left.isEmpty {
+                planButton(for: now, title: "Plan the rest of today", open: left.count,
+                           pro: "Puts today's unfinished goals into your free time before bedtime, with a reminder before each.",
+                           free: "With Pro, myTwin puts these into today's calendar and reminds you.")
+            }
         }
     }
 
@@ -196,40 +222,35 @@ struct TomorrowView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(goal.title)
                         Text(detail(goal)).font(.caption).foregroundStyle(.secondary)
-                        if clashes.contains(goal.id) {
-                            Text("Overlaps another event").font(.caption).foregroundStyle(.orange)
-                        }
+                        clashNote(goal)
                     }
                     Spacer(minLength: 0)
-                    if let at = goal.scheduled {
-                        Button(at.formatted(date: .omitted, time: .shortened)) {
-                            newTime = at
-                            moving = goal
-                        }
-                        .font(.subheadline.weight(.semibold))
-                        .buttonStyle(.bordered)
-                        .tint(.green)
-                        .accessibilityHint("Change the time")
-                    }
+                    timeButton(goal)
                 }
                 .padding(.vertical, 8)
                 if goal.id != next.goals.last?.id { Divider() }
             }
         }
         .dashboardCard()
-        .sheet(item: $moving) { goal in
-            NavigationStack {
-                DatePicker("Start", selection: $newTime, displayedComponents: .hourAndMinute)
-                    .datePickerStyle(.wheel)
-                    .labelsHidden()
-                    .navigationTitle(goal.title)
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) { Button("Cancel") { moving = nil } }
-                        ToolbarItem(placement: .confirmationAction) { Button("Save") { move(goal, to: newTime) } }
-                    }
+    }
+
+    /// Where Plan my day put a goal. Tap it to pick another time.
+    @ViewBuilder private func timeButton(_ goal: Goal) -> some View {
+        if let at = goal.scheduled {
+            Button(at.formatted(date: .omitted, time: .shortened)) {
+                newTime = at
+                moving = goal
             }
-            .presentationDetents([.height(300)])
+            .font(.subheadline.weight(.semibold))
+            .buttonStyle(.bordered)
+            .tint(.green)
+            .accessibilityHint("Change the time")
+        }
+    }
+
+    @ViewBuilder private func clashNote(_ goal: Goal) -> some View {
+        if clashes.contains(goal.id) {
+            Text("Overlaps another event").font(.caption).foregroundStyle(.orange)
         }
     }
 
@@ -244,44 +265,49 @@ struct TomorrowView: View {
         return [length, goal.kind == .professional ? "work" : "personal", when].compactMap { $0 }.joined(separator: " · ")
     }
 
-    private var planButton: some View {
-        VStack(alignment: .leading, spacing: 8) {
+    /// Plans a day's goals into its calendar with Pro, or offers Pro.
+    private func planButton(for day: Date, title: String, open: Int, pro: String, free: String) -> some View {
+        let result = results[GoalBook.name(day)]
+        return VStack(alignment: .leading, spacing: 8) {
             Button {
-                isPro ? plan() : upgrade()
+                isPro ? plan(day) : upgrade()
             } label: {
-                Label("Plan my day tomorrow", systemImage: isPro ? "wand.and.stars" : "lock.fill")
+                Label(title, systemImage: isPro ? "wand.and.stars" : "lock.fill")
                     .font(.headline).frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
-            .disabled(next.goals.isEmpty)
-            Text(result ?? (isPro
-                 ? "Puts each goal into tomorrow's free time, work in your strongest hours, with a reminder before each."
-                 : "With Pro, myTwin plans these into tomorrow's calendar and reminds you."))
+            .disabled(open == 0)
+            Text(result ?? (isPro ? pro : free))
                 .font(.caption).foregroundStyle(result == nil ? .secondary : .primary)
         }
     }
 
     // MARK: - Doing it
 
-    private func plan() {
+    /// Puts a day's goals on its calendar. Times already set stay; for today, nothing new
+    /// goes before now. Goals carried over to tomorrow are left out.
+    private func plan(_ day: Date) {
         writing = false
-        let goals = next.goals.filter { !$0.done }
-        let kept = goals.filter { $0.scheduled != nil }.count
-        let times = GoalPlanner.plan(goals, on: tomorrow, busy: calendar.busy(on: tomorrow),
-                                     wake: preferences.quietEnd, bedtime: preferences.bedtime(on: tomorrow))
+        addingToday = false
+        let isTomorrow = Calendar.current.isDate(day, inSameDayAs: tomorrow)
+        let goals = book.day(day).goals.filter { !$0.moved }
+        let open = goals.filter { !$0.done }
+        let kept = open.filter { $0.scheduled != nil }.count
+        let times = GoalPlanner.plan(goals, on: day, busy: calendar.busy(on: day), wake: preferences.quietEnd,
+                                     bedtime: preferences.bedtime(on: day), notBefore: now)
         let placed = goals.compactMap { goal in times[goal.id].map { (goal: goal, start: $0) } }
-        let saved = calendar.placeGoals(placed, on: tomorrow)
-        book.schedule(times, on: tomorrow)
-        let missed = goals.count - placed.count
-        let fresh = placed.count - kept
+        let saved = calendar.placeGoals(placed, on: day)
+        book.schedule(times, on: day)
+        let missed = open.filter { times[$0.id] == nil }.count
+        let fresh = open.count - kept - missed
         let plural = { (count: Int) in count == 1 ? "" : "s" }
-        result = saved == 0 ? "Couldn't add them to your calendar. Check calendar access on the You page."
-            : (kept == 0 ? "Planned \(saved) goal\(plural(saved)) into tomorrow, with reminders."
+        results[GoalBook.name(day)] = saved == 0 ? "Couldn't add them to your calendar. Check calendar access on the You page."
+            : (kept == 0 ? "Planned \(fresh) goal\(plural(fresh)) into \(isTomorrow ? "tomorrow" : "today"), with reminders."
                : "Kept your \(kept) time\(plural(kept))." + (fresh == 0 ? " Nothing new to plan." : " Planned \(fresh) new goal\(plural(fresh))."))
               + (missed > 0 ? " \(missed) didn't fit around your calendar." : "")
         Task {
-            if !book.isDemo {
+            if isTomorrow && !book.isDemo {
                 await NotificationManager().requestPermission()
                 await GoalNotifications.morning(for: tomorrow, goals: placed, wake: preferences.quietEnd)
             }
@@ -293,16 +319,16 @@ struct TomorrowView: View {
     private func move(_ goal: Goal, to start: Date) {
         moving = nil
         let end = start.addingTimeInterval(Double(goal.minutes) * 60)
-        let others = next.goals.filter { $0.id != goal.id }.compactMap { other in
+        let others = book.day(start).goals.filter { $0.id != goal.id }.compactMap { other in
             other.scheduled.map { DateInterval(start: $0, duration: Double(other.minutes) * 60) }
         }
-        let overlaps = (calendar.busy(on: tomorrow) + others).contains { $0.start < end && $0.end > start }
+        let overlaps = (calendar.busy(on: start) + others).contains { $0.start < end && $0.end > start }
         if overlaps { clashes.insert(goal.id) } else { clashes.remove(goal.id) }
 
         calendar.moveGoal(goal, to: start)
-        book.reschedule(goal, to: start, on: tomorrow)
-        result = "Moved \(goal.title) to \(start.formatted(date: .omitted, time: .shortened))."
-        guard !book.isDemo else { return }
+        book.reschedule(goal, to: start, on: start)
+        results[GoalBook.name(start)] = "Moved \(goal.title) to \(start.formatted(date: .omitted, time: .shortened))."
+        guard !book.isDemo, Calendar.current.isDate(start, inSameDayAs: tomorrow) else { return }
         let planned = next.goals.compactMap { goal in goal.scheduled.map { (goal: goal, start: $0) } }
         Task { await GoalNotifications.morning(for: tomorrow, goals: planned, wake: preferences.quietEnd) }
     }
