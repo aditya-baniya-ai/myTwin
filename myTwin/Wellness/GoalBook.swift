@@ -87,6 +87,14 @@ final class GoalBook {
         store(day, for: date)
     }
 
+    /// One planned goal moved to a time you picked. The others stay where they are.
+    func reschedule(_ goal: Goal, to start: Date, on date: Date) {
+        var day = day(date)
+        guard let index = day.goals.firstIndex(where: { $0.id == goal.id }) else { return }
+        day.goals[index].scheduled = start
+        store(day, for: date)
+    }
+
     /// A goal written back as a line, keeping its length so it's read the same way again.
     private func line(for goal: Goal) -> String {
         let length = goal.minutes % 60 == 0 ? "\(goal.minutes / 60) hr" : "\(goal.minutes) min"

@@ -80,6 +80,29 @@ final class GoalsTests: XCTestCase {
         XCTAssertEqual(reopened.day(tomorrow).goals.count, 3, "saved on the phone")
     }
 
+    /// Changing a planned time moves that goal's event, keeps its length, and leaves the
+    /// other goals where they were.
+    @MainActor func testMovingOnePlannedGoal() async {
+        let calendar = CalendarManager(demo: true)
+        let book = GoalBook(demo: true)
+        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: SampleDay.at(10))!
+        book.write("Finish report 2 hrs\nGym 45 min", for: tomorrow)
+        let goals = book.day(tomorrow).goals
+        let first = tomorrow, second = tomorrow.addingTimeInterval(3 * 3600)
+        XCTAssertEqual(calendar.placeGoals([(goals[0], first), (goals[1], second)], on: tomorrow), 2)
+        book.schedule([goals[0].id: first, goals[1].id: second], on: tomorrow)
+
+        let later = tomorrow.addingTimeInterval(5 * 3600)
+        XCTAssertTrue(calendar.moveGoal(goals[0], to: later))
+        book.reschedule(goals[0], to: later, on: tomorrow)
+
+        let report = calendar.week.first { $0.title == "Finish report" }
+        XCTAssertEqual(report?.startDate, later)
+        XCTAssertEqual(report?.endDate, later.addingTimeInterval(2 * 3600), "same length")
+        XCTAssertEqual(calendar.week.first { $0.title == "Gym" }?.startDate, second, "the other goal stays")
+        XCTAssertEqual(book.day(tomorrow).goals.map(\.scheduled), [later, second])
+    }
+
     @MainActor func testDemoKeepsItsGoalsInMemory() async {
         let book = GoalBook(demo: true)
         XCTAssertFalse(book.day(SampleDay.now).goals.isEmpty)

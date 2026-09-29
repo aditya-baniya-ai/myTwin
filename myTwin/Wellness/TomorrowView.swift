@@ -17,6 +17,11 @@ struct TomorrowView: View {
     @State private var askedForNotifications = false
     /// Turning what you said into goal lines.
     @State private var hearing = false
+    /// The planned goal whose time you're changing, and the time on the wheel.
+    @State private var moving: Goal?
+    @State private var newTime = Date.now
+    /// Goals you moved on top of something else on your calendar.
+    @State private var clashes: Set<UUID> = []
     @FocusState private var writing: Bool
 
     private var tomorrow: Date { Calendar.current.date(byAdding: .day, value: 1, to: now) ?? now }
@@ -154,11 +159,20 @@ struct TomorrowView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(goal.title)
                         Text(detail(goal)).font(.caption).foregroundStyle(.secondary)
+                        if clashes.contains(goal.id) {
+                            Text("Overlaps another event").font(.caption).foregroundStyle(.orange)
+                        }
                     }
                     Spacer(minLength: 0)
                     if let at = goal.scheduled {
-                        Text(at.formatted(date: .omitted, time: .shortened))
-                            .font(.subheadline.weight(.semibold)).foregroundStyle(.green)
+                        Button(at.formatted(date: .omitted, time: .shortened)) {
+                            newTime = at
+                            moving = goal
+                        }
+                        .font(.subheadline.weight(.semibold))
+                        .buttonStyle(.bordered)
+                        .tint(.green)
+                        .accessibilityHint("Change the time")
                     }
                 }
                 .padding(.vertical, 8)
@@ -166,6 +180,20 @@ struct TomorrowView: View {
             }
         }
         .dashboardCard()
+        .sheet(item: $moving) { goal in
+            NavigationStack {
+                DatePicker("Start", selection: $newTime, displayedComponents: .hourAndMinute)
+                    .datePickerStyle(.wheel)
+                    .labelsHidden()
+                    .navigationTitle(goal.title)
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) { Button("Cancel") { moving = nil } }
+                        ToolbarItem(placement: .confirmationAction) { Button("Save") { move(goal, to: newTime) } }
+                    }
+            }
+            .presentationDetents([.height(300)])
+        }
     }
 
     private func detail(_ goal: Goal) -> String {
@@ -217,6 +245,25 @@ struct TomorrowView: View {
                 await GoalNotifications.morning(for: tomorrow, goals: placed, wake: preferences.quietEnd)
             }
         }
+    }
+
+    /// One planned goal to the time you picked: its calendar event, its reminder and the
+    /// morning list all move with it. Only this goal moves; the rest of the plan stays.
+    private func move(_ goal: Goal, to start: Date) {
+        moving = nil
+        let end = start.addingTimeInterval(Double(goal.minutes) * 60)
+        let others = next.goals.filter { $0.id != goal.id }.compactMap { other in
+            other.scheduled.map { DateInterval(start: $0, duration: Double(other.minutes) * 60) }
+        }
+        let overlaps = (calendar.busy(on: tomorrow) + others).contains { $0.start < end && $0.end > start }
+        if overlaps { clashes.insert(goal.id) } else { clashes.remove(goal.id) }
+
+        calendar.moveGoal(goal, to: start)
+        book.reschedule(goal, to: start, on: tomorrow)
+        result = "Moved \(goal.title) to \(start.formatted(date: .omitted, time: .shortened))."
+        guard !book.isDemo else { return }
+        let planned = next.goals.compactMap { goal in goal.scheduled.map { (goal: goal, start: $0) } }
+        Task { await GoalNotifications.morning(for: tomorrow, goals: planned, wake: preferences.quietEnd) }
     }
 
     /// The evening "did you finish?" for tomorrow's goals, for everyone.

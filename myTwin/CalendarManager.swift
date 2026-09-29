@@ -327,6 +327,22 @@ final class CalendarManager {
         return saved
     }
 
+    /// Moves a planned goal's event to a time you picked, keeping its length. Its reminder
+    /// moves with it. Returns false when the event is gone, say deleted in Calendar.
+    @discardableResult
+    func moveGoal(_ goal: Goal, to start: Date) -> Bool {
+        guard isAuthorized else { return false }
+        loadWeekEvents()
+        guard let event = week.first(where: { $0.url?.absoluteString == Self.goalPrefix + goal.id.uuidString })
+        else { return false }
+        let length = event.endDate.timeIntervalSince(event.startDate)
+        event.startDate = start
+        event.endDate = start.addingTimeInterval(length)
+        guard (try? save(event)) != nil else { return false }
+        didMutate()
+        return true
+    }
+
     // MARK: - Bedtime
 
     private static let bedtimeKey = "calendar.bedtime.event"

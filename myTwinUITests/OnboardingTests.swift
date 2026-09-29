@@ -132,5 +132,21 @@ final class OnboardingTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Planned 2 goals into tomorrow, with reminders."].waitForExistence(timeout: 5))
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = "Tomorrow planned"; screenshot.lifetime = .keepAlways; add(screenshot)
+
+        // Tap a planned time to change it: Call mom, 8 PM to 9 PM.
+        let time = app.buttons.matching(NSPredicate(format: "label BEGINSWITH '8:00'")).firstMatch
+        XCTAssertTrue(time.waitForExistence(timeout: 5))
+        time.tap()
+        let hour = app.pickerWheels.element(boundBy: 0)
+        XCTAssertTrue(hour.waitForExistence(timeout: 5))
+        hour.adjust(toPickerWheelValue: "9")
+        let moved = XCTAttachment(screenshot: app.screenshot())
+        moved.name = "Changing the time"; moved.lifetime = .keepAlways; add(moved)
+        app.buttons["Save"].tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Moved Call mom to 9:00'")).firstMatch
+            .waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH '9:00'")).firstMatch.exists)
+        let after = XCTAttachment(screenshot: app.screenshot())
+        after.name = "Time changed"; after.lifetime = .keepAlways; add(after)
     }
 }
