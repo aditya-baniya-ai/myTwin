@@ -68,4 +68,6 @@ final class TodayPlanSource {
     var summary: () -> String = { "No forecast for today yet." }
     /// The last seven days as a few sentences; see WeekRecap.
     var weekRecap: () -> String = { "Not enough nights of sleep data yet to recap the week." }
+    /// Today's and tomorrow's goals and the streak; see GoalBook.summaryText.
+    var goals: () -> String = { "No goals written yet." }
 }

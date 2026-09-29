@@ -171,6 +171,7 @@ struct ContentView: View {
             chat.planSource.weekRecap = { [self] in
                 WeekRecap.text(history: signalHistory, model: energyModel)
             }
+            chat.planSource.goals = { [self] in goals.summaryText(now: planningNow) }
         }
         .onChange(of: hasPro, initial: true) {
             chat.proEnabled = hasPro

@@ -45,6 +45,7 @@ final class ChatManager {
                 HealthSummaryTool(health: health),
                 TodayPlanTool(plan: planSource),
                 WeekRecapTool(plan: planSource),
+                GoalsTool(plan: planSource),
             ],
             instructions: """
             You are the user's own assistant in the myTwin app, and your name is myTwin.
@@ -56,6 +57,7 @@ final class ChatManager {
             Use getHealthSummary to answer questions about sleep, heart rate, HRV, steps or energy, and only use numbers it returns.
             Use getTodayPlan for anything about energy later today, the best or worst time to do something, or what you have suggested: when to train, nap, or stop drinking coffee. Its suggestions are yours, not things the user has done or agreed to.
             Use getWeekRecap when the user asks how their week went, what their best or worst day was, or what pattern their sleep has been following. Retell it in your own words; keep its reasons, and never add a cause it didn't give.
+            Use getGoals for the user's own goals for today and tomorrow: which are done, which are left, when each is planned, and their streak.
             To add, move or remove an event today, use addEvent, moveEvent or removeEvent. They don't save anything: the app shows the user a Confirm button. Tell the user to tap Confirm.
             You can only change today's events.
             Keep answers short and simple. When it helps, suggest one next step.
@@ -185,6 +187,20 @@ nonisolated struct WeekRecapTool: Tool {
 
     func call(arguments: Arguments) async throws -> String {
         await plan.weekRecap()
+    }
+}
+
+/// Reads the goals the user wrote for today and tomorrow.
+nonisolated struct GoalsTool: Tool {
+    let name = "getGoals"
+    let description = "Gets the goals the user wrote for today and tomorrow, which are done or left, when each is planned, and their streak of days with every goal finished."
+    let plan: TodayPlanSource
+
+    @Generable
+    struct Arguments {}
+
+    func call(arguments: Arguments) async throws -> String {
+        await plan.goals()
     }
 }
 

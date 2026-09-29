@@ -131,6 +131,7 @@ final class GeminiChat {
         Use getHealthSummary for questions about sleep, heart rate, HRV, steps or energy, and only use numbers it returns.
         Use getTodayPlan for anything about energy later today, the best or worst time to do something, or what you have suggested: when to train, nap, or stop drinking coffee. Its suggestions are yours, not things the user has done or agreed to.
         Use getWeekRecap when the user asks how their week went, what their best or worst day was, or what pattern their sleep has been following. Retell it in your own words; keep its reasons, and never add a cause it didn't give.
+        Use getGoals for the user's own goals for today and tomorrow: which are done, which are left, when each is planned, and their streak.
         To add, move or remove one of today's events, use addEvent, moveEvent or removeEvent. They don't save anything: the app shows the user a Confirm button. Tell the user to tap Confirm, and never say the change is done.
         You can only change today's events.
         Your answers are spoken aloud, so keep them to one to three short sentences, without lists or formatting.
@@ -139,12 +140,13 @@ final class GeminiChat {
         """
     }
 
-    /// The same five tools as the on-device model, described the way Gemini expects.
+    /// The same tools as the on-device model, described the way Gemini expects.
     private static let tools: [[String: Any]] = [["functionDeclarations": [
         function("getTodayEvents", "Gets the user's calendar events for today, with start and end times."),
         function("getWeekEvents", "Gets the user's calendar for the next seven days, a day at a time, including today. Use for tomorrow, a named weekday, the weekend, or the week ahead."),
         function("getHealthSummary", "Gets the user's latest health numbers: sleep, HRV, resting heart rate, respiratory rate, steps and active energy."),
         function("getWeekRecap", "Recaps the user's last seven days: their best and hardest day, what about their sleep or resting heart rate explains each, and one pattern across the week."),
+        function("getGoals", "Gets the goals the user wrote for today and tomorrow, which are done or left, when each is planned, and their streak of days with every goal finished."),
         function("getTodayPlan", "Gets today's predicted energy curve, its peak and dip, bedtime, and the activities myTwin suggests fitting into the day, such as a workout, a nap or the last coffee."),
         function("addEvent", "Suggests adding an event today. The user must tap Confirm before it is saved.", [
             "title": ("STRING", "Short event title, for example Gym"),
@@ -192,6 +194,8 @@ final class GeminiChat {
             return plan.summary()
         case "getWeekRecap":
             return plan.weekRecap()
+        case "getGoals":
+            return plan.goals()
         case "addEvent":
             return calendar.proposeAdd(title: title, hour: number("hour"), minute: number("minute"),
                                        durationMinutes: number("durationMinutes", default: 60))

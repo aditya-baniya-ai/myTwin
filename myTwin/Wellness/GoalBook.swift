@@ -56,6 +56,26 @@ final class GoalBook {
         return count
     }
 
+    /// Today's and tomorrow's goals in words, for Dash: what's done, what's left, when each
+    /// is planned, and the streak.
+    func summaryText(now: Date) -> String {
+        func list(_ goals: [Goal]) -> String {
+            goals.map { goal in
+                let state = goal.done ? "done" : goal.moved ? "moved to tomorrow" : "not done yet"
+                let when = goal.scheduled.map { ", planned at \($0.formatted(date: .omitted, time: .shortened))" } ?? ""
+                return "- \(goal.title) (\(goal.minutes) min, \(goal.kind == .professional ? "work" : "personal"), \(state)\(when))"
+            }.joined(separator: "\n")
+        }
+        let today = day(now).goals
+        let next = Calendar.current.date(byAdding: .day, value: 1, to: now).map { day($0).goals } ?? []
+        var lines: [String] = []
+        lines.append(today.isEmpty ? "No goals written for today." : "Today's goals:\n" + list(today))
+        lines.append(next.isEmpty ? "No goals written for tomorrow yet." : "Tomorrow's goals:\n" + list(next))
+        let streak = streak(on: now)
+        lines.append(streak > 0 ? "Streak: \(streak) day\(streak == 1 ? "" : "s") in a row with every goal finished." : "No streak going yet.")
+        return lines.joined(separator: "\n")
+    }
+
     /// Saves what you typed and reads the goals out of it, keeping what you'd already
     /// ticked or planned for any line that's still there.
     func write(_ text: String, for date: Date) {

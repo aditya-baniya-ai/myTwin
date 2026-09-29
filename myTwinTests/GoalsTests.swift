@@ -212,4 +212,23 @@ final class GoalsTests: XCTestCase {
         book.write("Anything", for: SampleDay.now)
         XCTAssertNil(UserDefaults.standard.data(forKey: "goals.days.v1").flatMap { String(data: $0, encoding: .utf8) }?.range(of: "Anything"))
     }
+
+    /// What Dash reads about your goals.
+    @MainActor func testSummaryForDash() async {
+        let name = "myTwinTests.\(UUID())"
+        let defaults = UserDefaults(suiteName: name)!
+        defer { defaults.removePersistentDomain(forName: name) }
+        let book = GoalBook(defaults: defaults)
+        let today = at(9, day: 28), tomorrow = at(9)
+        XCTAssertTrue(book.summaryText(now: today).contains("No goals written for today."))
+
+        book.write("Email Prof Lee\nFinish report 2 hrs", for: today)
+        book.toggle(book.day(today).goals[0], on: today)
+        book.write("Gym 45 min", for: tomorrow)
+        let text = book.summaryText(now: today)
+        XCTAssertTrue(text.contains("- Email Prof Lee (60 min, work, done)"), text)
+        XCTAssertTrue(text.contains("- Finish report (120 min, work, not done yet)"), text)
+        XCTAssertTrue(text.contains("Tomorrow's goals:\n- Gym (45 min, personal, not done yet)"), text)
+        XCTAssertTrue(text.contains("No streak going yet."), text)
+    }
 }
