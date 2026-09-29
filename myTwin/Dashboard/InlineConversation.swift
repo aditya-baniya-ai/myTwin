@@ -167,7 +167,10 @@ struct DashMoment: Identifiable, Equatable {
     let line: String
     let clip: String
 
-    static var allDone: DashMoment { .init(line: "All of today's goals done. That's a good day.", clip: "jump") }
+    static func allDone(streak: Int) -> DashMoment {
+        .init(line: streak > 1 ? "All done. That's \(streak) days in a row!" : "All of today's goals done. That's a good day.",
+              clip: "jump")
+    }
     static var carriedOver: DashMoment { .init(line: "Moved to tomorrow. It'll be a fresh start.", clip: "stretch") }
 }
 

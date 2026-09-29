@@ -213,12 +213,15 @@ final class OnboardingTests: XCTestCase {
         dismissNudge(app)
         open("Tomorrow", in: app)
 
+        // The demo's three earlier days were all done; today makes four.
+        XCTAssertTrue(app.staticTexts["3 days in a row with every goal done"].waitForExistence(timeout: 5))
         for goal in ["Finish the lit review draft", "Email Professor Lee", "Call mom", "Grocery run"] {
             let tick = app.buttons["Tick off \(goal)"]
             XCTAssertTrue(tick.waitForExistence(timeout: 5), goal)
             tick.tap()
         }
-        let cheer = app.staticTexts["All of today's goals done. That's a good day."]
+        XCTAssertTrue(app.staticTexts["4 days in a row with every goal done"].waitForExistence(timeout: 5))
+        let cheer = app.staticTexts["All done. That's 4 days in a row!"]
         XCTAssertTrue(cheer.waitForExistence(timeout: 5))
         sleep(2)                                           // mid-jump
         let shot = XCTAttachment(screenshot: app.screenshot())

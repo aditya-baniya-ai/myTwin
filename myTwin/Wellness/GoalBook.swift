@@ -23,6 +23,13 @@ final class GoalBook {
         self.defaults = defaults
         if demo {
             days = [Self.name(SampleDay.now): Day(text: DemoData.todaysGoals, goals: GoalParser.parse(DemoData.todaysGoals))]
+            // The three days before, all done, so the demo shows a streak to keep going.
+            for back in 1...3 {
+                guard let date = Calendar.current.date(byAdding: .day, value: -back, to: SampleDay.now) else { continue }
+                var goals = GoalParser.parse("Email the lab\nGym 45 min")
+                for index in goals.indices { goals[index].done = true }
+                days[Self.name(date)] = Day(text: "Email the lab\nGym 45 min", goals: goals)
+            }
         } else {
             days = defaults.data(forKey: Self.key).flatMap { try? JSONDecoder().decode([String: Day].self, from: $0) } ?? [:]
         }
@@ -34,6 +41,20 @@ final class GoalBook {
     }
 
     func day(_ date: Date) -> Day { days[Self.name(date)] ?? Day() }
+
+    /// Days in a row with every goal finished, counting back from `date`. Today counts once
+    /// it's finished; until then the streak runs to yesterday, so it isn't lost in the morning.
+    /// A day with no goals ends it.
+    func streak(on date: Date) -> Int {
+        let calendar = Calendar.current
+        var cursor = day(date).finished ? date : calendar.date(byAdding: .day, value: -1, to: date) ?? date
+        var count = 0
+        while day(cursor).finished, count < 60 {
+            count += 1
+            cursor = calendar.date(byAdding: .day, value: -1, to: cursor) ?? cursor
+        }
+        return count
+    }
 
     /// Saves what you typed and reads the goals out of it, keeping what you'd already
     /// ticked or planned for any line that's still there.
@@ -133,8 +154,8 @@ final class GoalBook {
     private func store(_ day: Day, for date: Date) {
         days[Self.name(date)] = day
         guard !isDemo else { return }
-        // A week back is plenty for the nightly check.
-        let cutoff = Self.name(Calendar.current.date(byAdding: .day, value: -7, to: .now) ?? .now)
+        // Two months back: enough for a streak to grow, and still only a few kilobytes.
+        let cutoff = Self.name(Calendar.current.date(byAdding: .day, value: -60, to: .now) ?? .now)
         days = days.filter { $0.key >= cutoff }
         if let data = try? JSONEncoder().encode(days) { defaults.set(data, forKey: Self.key) }
     }

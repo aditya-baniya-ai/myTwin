@@ -184,6 +184,28 @@ final class GoalsTests: XCTestCase {
         XCTAssertFalse(GoalBook.Day().finished, "nor is an empty one")
     }
 
+    /// Finished days in a row. Today counts once it's finished, and until then doesn't
+    /// break the streak; a day with no goals, or one left unfinished, does.
+    @MainActor func testStreakOfFinishedDays() async {
+        let name = "myTwinTests.\(UUID())"
+        let defaults = UserDefaults(suiteName: name)!
+        defer { defaults.removePersistentDomain(forName: name) }
+        let book = GoalBook(defaults: defaults)
+        func finish(_ day: Int) {
+            let date = at(9, day: day)
+            book.write("Gym\nRead", for: date)
+            for goal in book.day(date).goals { book.toggle(goal, on: date) }
+        }
+        finish(24); finish(26); finish(27); finish(28)          // the 25th had no goals
+        book.write("Call mom\nBuy milk", for: at(9))            // today, the 29th, not done yet
+
+        XCTAssertEqual(book.streak(on: at(9)), 3, "yesterday's run still counts in the morning")
+        for goal in book.day(at(9)).goals { book.toggle(goal, on: at(9)) }
+        XCTAssertEqual(book.streak(on: at(9)), 4, "and today joins it once done")
+        book.toggle(book.day(at(9, day: 27)).goals[0], on: at(9, day: 27))
+        XCTAssertEqual(book.streak(on: at(9)), 2, "an unfinished day ends it")
+    }
+
     @MainActor func testDemoKeepsItsGoalsInMemory() async {
         let book = GoalBook(demo: true)
         XCTAssertFalse(book.day(SampleDay.now).goals.isEmpty)

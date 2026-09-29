@@ -86,6 +86,14 @@ struct TomorrowView: View {
         let left = today.goals.filter { !$0.done && !$0.moved }
         return VStack(alignment: .leading, spacing: 10) {
             Text(today.goals.isEmpty ? "Today's goals" : "Did you finish today's goals?").font(.title3.bold())
+            let streak = book.streak(on: now)
+            if streak > 0 {
+                Label("\(streak) day\(streak == 1 ? "" : "s") in a row with every goal done", systemImage: "flame.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.orange)
+                    .contentTransition(.numericText())
+                    .animation(.snappy, value: streak)
+            }
             VStack(spacing: 0) {
                 ForEach(today.goals) { goal in
                     HStack(spacing: 12) {
@@ -411,7 +419,7 @@ struct TomorrowView: View {
     private func tick(_ goal: Goal) {
         let before = today.finished
         book.toggle(goal, on: now)
-        if !before && today.finished { react(.allDone) }
+        if !before && today.finished { react(.allDone(streak: book.streak(on: now))) }
     }
 
     /// Saves an edited goal of today's, and changes its calendar event to match if it has one.
