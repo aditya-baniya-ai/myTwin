@@ -57,6 +57,20 @@ final class GoalsTests: XCTestCase {
         XCTAssertLessThan(blocks.count, 5, "15 hours don't fit between 8 AM and 10 PM")
     }
 
+    func testPlanningAgainKeepsTimesAndFillsInNewGoals() {
+        var goals = GoalParser.parse("Finish lit review, 2 hrs\nGym 45 min")
+        let first = GoalPlanner.plan(goals, on: at(0), busy: [], wake: 8, bedtime: at(23))
+        goals[0].scheduled = at(15)                       // you moved it
+        goals[1].scheduled = first[goals[1].id]           // the planner's pick, untouched
+        goals += GoalParser.parse("Call the bank 30 min")  // written after planning
+
+        let again = GoalPlanner.plan(goals, on: at(0), busy: [], wake: 8, bedtime: at(23))
+        XCTAssertEqual(again[goals[0].id], at(15), "your time stays")
+        XCTAssertEqual(again[goals[1].id], first[goals[1].id], "so does the planner's")
+        let bank = try! XCTUnwrap(again[goals[2].id], "the new goal is planned")
+        XCTAssertFalse(bank < at(17) && bank.addingTimeInterval(1800) > at(15), "around the kept ones")
+    }
+
     // MARK: Keeping them
 
     @MainActor func testTicksSurviveEditsAndUnfinishedMoveOn() async {

@@ -230,14 +230,18 @@ struct TomorrowView: View {
     private func plan() {
         writing = false
         let goals = next.goals.filter { !$0.done }
+        let kept = goals.filter { $0.scheduled != nil }.count
         let times = GoalPlanner.plan(goals, on: tomorrow, busy: calendar.busy(on: tomorrow),
                                      wake: preferences.quietEnd, bedtime: preferences.bedtime(on: tomorrow))
         let placed = goals.compactMap { goal in times[goal.id].map { (goal: goal, start: $0) } }
         let saved = calendar.placeGoals(placed, on: tomorrow)
         book.schedule(times, on: tomorrow)
         let missed = goals.count - placed.count
+        let fresh = placed.count - kept
+        let plural = { (count: Int) in count == 1 ? "" : "s" }
         result = saved == 0 ? "Couldn't add them to your calendar. Check calendar access on the You page."
-            : "Planned \(saved) goal\(saved == 1 ? "" : "s") into tomorrow, with reminders."
+            : (kept == 0 ? "Planned \(saved) goal\(plural(saved)) into tomorrow, with reminders."
+               : "Kept your \(kept) time\(plural(kept))." + (fresh == 0 ? " Nothing new to plan." : " Planned \(fresh) new goal\(plural(fresh))."))
               + (missed > 0 ? " \(missed) didn't fit around your calendar." : "")
         Task {
             if !book.isDemo {

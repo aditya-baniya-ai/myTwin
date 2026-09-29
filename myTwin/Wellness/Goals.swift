@@ -140,8 +140,9 @@ enum GoalParser {
     }
 }
 
-/// Puts a day's goals into its free time: named times first, then work in your strongest
-/// hours, then personal goals, later in the day where there's room.
+/// Puts a day's goals into its free time: times already set stay where they are, then named
+/// times, then work in your strongest hours, then personal goals, later in the day where
+/// there's room.
 enum GoalPlanner {
     static func plan(_ goals: [Goal], on day: Date, busy: [DateInterval], wake: Int, bedtime: Date,
                      dayStart: Double = DayCharge.unknownDay) -> [UUID: Date] {
@@ -164,7 +165,10 @@ enum GoalPlanner {
             let rank = { (g: Goal) in g.hour != nil ? 0 : g.kind == .professional ? 1 : 2 }
             return rank(a) != rank(b) ? rank(a) < rank(b) : a.minutes > b.minutes
         }
-        for goal in order {
+        // A time set by an earlier plan, or by you, is kept: planning again only fills in
+        // the goals that don't have one yet.
+        for goal in order { if let start = goal.scheduled { take(goal, start) } }
+        for goal in order where goal.scheduled == nil {
             if let hour = goal.hour,
                let start = calendar.date(bySettingHour: hour, minute: goal.minute ?? 0, second: 0, of: day) {
                 if free(start, goal.minutes) { take(goal, start) }

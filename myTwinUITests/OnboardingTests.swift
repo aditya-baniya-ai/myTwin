@@ -173,5 +173,10 @@ final class OnboardingTests: XCTestCase {
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH '9:00'")).firstMatch.exists)
         let after = XCTAttachment(screenshot: app.screenshot())
         after.name = "Time changed"; after.lifetime = .keepAlways; add(after)
+
+        // Planning again keeps the time you chose.
+        plan.tap()
+        XCTAssertTrue(app.staticTexts["Kept your 2 times. Nothing new to plan."].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH '9:00'")).firstMatch.exists)
     }
 }
