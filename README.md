@@ -17,16 +17,13 @@ Built for the RevenueCat Shipaton 2026 · Next Gen Award
 
 </div>
 
-A full calendar does not tell you whether you have the energy for it. **myTwin helps you
-plan your day around your sleep, activity and goals.**
+myTwin turns sleep, activity, calendar events and your own goals into a practical daily plan.
+**Dash**, an animated 3D companion, shows your estimated energy. Free includes check-ins,
+activity, goals and your calendar. **Pro** adds forecasts, scheduling, Rescue my day and a
+spoken **Gemini mentor conversation** that you can answer by talking or typing.
 
-Meet **Dash**, your animated 3D companion. He shows how your energy might change, helps you
-make room for your goals and talks through your day with you. You can **speak or type**.
-
-Start with Free for check-ins, activity, goals and your calendar. Pro adds energy forecasts,
-automatic goal scheduling, **Rescue my day** and conversations with Dash using Gemini voice.
-
-Energy forecasts are estimates, not medical advice or a measurement of your body's battery.
+The energy percentage and hourly curve are **rough estimates**, not measurements of a
+body battery or medical advice. Your own check-in can adjust the plan.
 
 <p align="center">
   <img src="assets/screenshots/guide/demo-pro-dash.png" width="240" alt="Pro demo: Dash"/>
@@ -36,40 +33,48 @@ Energy forecasts are estimates, not medical advice or a measurement of your body
 
 ## Start here
 
-- [Try the five-minute demo](#judges-five-minute-walkthrough)
-- [Build and run](#run-the-app)
-- [Explore the features](#use-every-feature)
-- [Compare Free and Pro](#free-versus-pro)
-- [Use your own data](#set-up-your-own-account)
-- [Set up Gemini and other services](#configure-integrations)
-- [Need help?](#troubleshooting)
+- [Judges: five-minute walkthrough](#judges-five-minute-walkthrough)
+- [Run the app](#run-the-app)
+- [Guest demo: Free and Pro](#guest-demo-free-and-pro)
+- [Set up your own account](#set-up-your-own-account)
+- [Use every feature](#use-every-feature)
+- [Free versus Pro](#free-versus-pro)
+- [Configure integrations](#configure-integrations)
+- [Privacy and calendar writes](#privacy-and-calendar-writes)
+- [Troubleshooting](#troubleshooting)
+- [Testing and screenshots](#testing-and-screenshots)
+- [Meet Dash](#meet-dash)
+- [Honest limits](#honest-limits)
+- [Project layout](#project-layout)
 
 ## Judges: five-minute walkthrough
 
-Try the app with **Alex's fictional day**. You do not need a watch, personal health data
-or a purchase. The demo is set at 2 PM so you can repeat the same walkthrough.
+The guest demo uses a fictional person, **Alex**, and a fixed **2 PM** day. No wearable,
+personal health records or purchase is needed to try the app.
 
-1. **Meet Dash.** [Run the app](#run-the-app), then choose **Continue as a guest → Continue with Pro**.
-2. **See the day ahead.** Open **Predictions** to see the energy forecast, then **Plan** to see the schedule.
-3. **Rescue a busy day.** Tap **Rescue my day → Preview my rescue → Confirm demo change**.
-   See what moved, then try **Undo change**. Your real calendar is untouched.
-4. **Plan tomorrow.** Open **Tomorrow**, write a goal and tap **Plan my day tomorrow**.
-   Change expected sleep to explore how the outlook changes.
-5. **Talk to Dash.** With [Gemini configured](#configure-integrations), tap
-   **Start conversation** on Dash. Type on Simulator or speak on a supported iPhone.
-   Try: “Which goal should I focus on first?”
-6. **Compare Free and Pro.** Use the **Free / Pro** switch in the demo banner.
-   Tap **Use my account** when you want to connect your own data.
-
-**No Gemini key?** You can still try the other demo features. Only the Gemini conversation
-needs a key, permission and internet access.
+1. Build and run using the instructions below.
+2. Choose **Continue as a guest → Continue without Pro**. Look at Dash and the locked
+   forecast/planning features.
+3. Switch the demo banner to **Pro**. Open **Predictions** for the hourly forecast and week story.
+4. Open **Plan → Week**, then tap a day to see its events. Return to today's plan.
+5. Choose **Rescue my day → Preview my rescue → Confirm demo change**. Look at the result
+   and try **Undo change**. Only the fictional calendar changes.
+6. Open **Tomorrow**. Add or edit a goal for today, tick one off, and select **Plan the rest
+   of today**. Write tomorrow's goals and choose **Plan my day tomorrow**.
+7. Scroll to tomorrow's prediction and change expected sleep. The outlook is a **what-if**,
+   based on assumed typical sleep quality and heart rate.
+8. Open **You → Make it yours** and **Dash's voice**. Compare Free and Pro again.
+9. Optional, with a Gemini key and your permission: tap **Start conversation** on Dash or let Dash start a Pro check-in. Type a reply on
+   Simulator, or speak on a supported iPhone. Ask for a calendar change and review **Confirm**.
+10. Tap **Use my account** to explore personal setup. The demo switch is not a real subscription.
 
 ## Run the app
 
 ### Simulator: quickest route
 
-You need a Mac with **Xcode 26 or later**, an **iOS 26 or later** Simulator and internet
-access to download dependencies. There is no separate server to run.
+Requirements: a Mac with **Xcode 26 or later**, an installed **iOS 26 or later** Simulator,
+and internet access to download the RevenueCat Swift package. There is no separate server
+to start, and you do not need CocoaPods.
 
 ```sh
 git clone https://github.com/aditya-baniya-ai/myTwin.git
@@ -77,35 +82,32 @@ cd myTwin
 open myTwin.xcodeproj
 ```
 
-1. Wait for Xcode to resolve Swift Package Manager dependencies.
+1. Wait for Xcode to download the Swift packages the app needs.
 2. Select the **myTwin** scheme and an installed iPhone Simulator.
-3. Press **⌘R**. Choose the guest route on the welcome screen.
-4. For repeat demonstrations, open **Product → Scheme → Edit Scheme → Run → Arguments**.
+3. Press **⌘R**. Choose the guest option on the welcome screen.
+4. To start directly in the demo next time, open **Product → Scheme → Edit Scheme → Run → Arguments**.
    Add `--sample-day` for Pro or `--demo-free` for Free. Remove these arguments to use personal mode.
 
 No private Gemini key is required for the visual demo. The repository includes a **public
 RevenueCat Test Store SDK key**. Gemini chat and the mentor do require your own Gemini key.
-Use a supported iPhone to try voice input and Apple’s on-device chat.
-
-<details>
-<summary>Running on an iPhone and Simulator limitations</summary>
+We could not test Apple's on-device chat or voice input in our Simulator setup.
 
 | Capability | Simulator | Supported iPhone |
 |---|---|---|
 | Guest Free/Pro, Dash, calendar, goals, Rescue, settings | Yes | Yes |
-| Typed Gemini replies and mentor interface | With key, consent and internet | With key, consent and internet |
+| Typed Gemini replies and mentor interface | With a key, permission and internet | With a key, permission and internet |
 | Voice input and hands-free reply timing | Not supported in the tested Simulator | Microphone/speech permission and supported language required |
 | Apple Foundation Models answers | Unavailable in the tested Simulator | Apple Intelligence support and model availability required |
 | Your own Health data and wearable syncing | No real phone/watch records | With Health access and records from your sources |
-| Home Screen widget / Live Activity | Previewable; device validation still matters | Subject to iOS settings and update scheduling |
+| Home Screen widget / Live Activity | Can be previewed; phone testing is still needed | Subject to iOS settings and update scheduling |
 
 ### Your iPhone
 
 1. Connect and unlock your iPhone; trust the Mac if prompted.
 2. In Xcode's app and widget targets, choose your development **Team** and unique bundle IDs.
 3. Match the **App Group** in both targets and `Shared/TwinState.swift`.
-4. Preserve the app's HealthKit capability, privacy usage descriptions and widget extension.
-   Let Xcode manage signing; capability/provisioning errors must be resolved for your team.
+4. Keep the app's HealthKit capability, permission descriptions and widget extension.
+   Let Xcode manage signing. Fix any signing or capability errors shown for your team.
 5. Select your iPhone and run. Enable **Developer Mode** and trust the development build if iOS asks.
 6. Follow personal setup below, or open the guest demo first.
 
@@ -113,15 +115,7 @@ Apple's [device and Simulator running guide](https://developer.apple.com/documen
 explains the device/signing workflow. App Store distribution needs its own production signing,
 store configuration and review; changing a key alone is not a release process.
 
-</details>
-
 ## Guest demo: Free and Pro
-
-Choose **Continue as a guest**, then pick Free or Pro. Switch between them in the demo banner.
-Demo health records, goals and calendar events are fictional.
-
-<details>
-<summary>See the demo steps and Free / Pro screenshots</summary>
 
 <p align="center">
   <img src="assets/screenshots/guide/welcome.png" width="240" alt="Welcome: guest or personal setup"/>
@@ -130,18 +124,18 @@ Demo health records, goals and calendar events are fictional.
 
 1. Tap **Continue as a guest**.
 2. Choose **Continue without Pro** or **Continue with Pro**.
-3. Every main page shows **Demo · fictional data · 2 PM**. Use **Free / Pro** to compare features.
-4. Try calendar changes, goal planning and weight entry: the demo uses in-memory fictional data.
+3. Every main page shows **Demo · fictional data · 2 PM**. Use **Free / Pro** to compare which features each includes.
+4. Try calendar changes, goal planning and weight entry: the demo keeps fictional data in memory for that session.
 5. Tap **Use my account** to leave. From personal mode, return through **You → Try the demo**.
 
 Demo health, calendar and goals are separate from your real records. Voice preferences and
-Gemini consent are app settings; the demo is not a separate cloud login. Enabling Gemini
-allows demo questions and fictional tool results to be sent to Google.
+Gemini permission are app settings; the demo is not a separate cloud login. Enabling Gemini
+allows demo questions and the fictional records Dash uses to answer them to be sent to Google.
 
 ### Free demo
 
 Start with check-ins, your calendar, activity and goal tracking. Forecast and scheduling
-buttons ask you to upgrade. Dash's proactive card offers **Tell me more / Not now**.
+buttons ask you to upgrade. When Dash starts a check-in, his card offers **Tell me more / Not now**.
 
 <p align="center">
   <img src="assets/screenshots/guide/demo-free-dash.png" width="240" alt="Free demo: Dash"/>
@@ -152,8 +146,8 @@ buttons ask you to upgrade. Dash's proactive card offers **Tell me more / Not no
 ### Pro demo
 
 Pro adds forecasts, suggestions, Rescue and goal scheduling to the same fictional day.
-With Gemini set up and allowed, you can also talk to Dash. Trying Pro in the demo is free;
-it does not activate a subscription for your personal profile.
+You can also talk to Dash when Gemini is set up and allowed. Trying Pro in the demo does
+not charge you or activate a paid subscription for your personal profile.
 
 <p align="center">
   <img src="assets/screenshots/guide/demo-pro-predictions.png" width="240" alt="Pro demo: energy forecast"/>
@@ -161,29 +155,20 @@ it does not activate a subscription for your personal profile.
   <img src="assets/screenshots/guide/demo-pro-tomorrow.png" width="240" alt="Pro demo: goals"/>
 </p>
 
-</details>
-
 ## Set up your own account
 
-Choose **Continue as a user** or **Use my account**. Add your name, connect Apple Health
-and Calendar, then choose your preferences under **You**. Your profile stays on your device;
-there is no email/password sign-in.
-
-<details>
-<summary>See personal setup, permissions and personal Pro screenshots</summary>
-
-“Your account” currently means a **local profile** on the device, not an email/password
-account. There is no app-managed cloud login or profile-sync setup in this build.
+“Your account” is a **profile saved on your device**. You do not sign in with an email or
+password. This version does not offer cloud sign-in or sync your profile between devices.
 
 1. Choose **Continue as a user**, or **Use my account** from the demo.
 2. Enter your name and age, then tap **Continue**.
 3. Select **Connect Apple Health** and allow the records you want to use.
-4. Select **Connect Calendar** to read events and enable planning writes.
+4. Select **Connect Calendar** so the app can read events and save your plans.
 5. Continue. You may use **Continue anyway** and connect missing sources later under **You**.
 6. Decide whether to allow Gemini. This is separate from Health and Calendar permissions.
 7. Open **You → Make it yours**, choose your preferences, then **Save**.
-8. Start with a check-in. The energy forecast needs today's sleep and at least
-   seven usable nights from the last 14 days. Until then, the app shows **Still learning**.
+8. Start with a check-in. An energy forecast based on your records needs today's sleep and at least
+   seven usable nights from the last 14 days. The app does not make up missing records.
 
 The screenshots below show **personal-account mode with a clean sample profile**, not the
 author's private health or calendar records. A connected physical phone is needed to capture
@@ -201,17 +186,17 @@ those records; the phone was unavailable during this documentation run.
 
 ### Personal Pro: the same features outside the demo
 
-The screenshots below are from **personal mode with a simulated Pro subscription**.
+The screenshots below are from **personal mode with a simulated Pro subscription through RevenueCat Test Store**.
 They use a clean sample profile, not private phone data. The purchase was simulated, and no
 personal records were sent to Gemini for this test.
 
 - **Plan tomorrow** is visible all day. The Tomorrow tab works in both modes.
 - **Start conversation** is available on Dash. Pro users can start without waiting for an
-  automatic check-in or an energy forecast. Gemini still needs a key, permission and internet.
+  automatic check-in or an energy forecast. Gemini still needs a key, your permission and internet.
 - Add at least one goal to enable **Plan my day tomorrow**. The empty personal-profile
   screenshot shows the button disabled because there are no goals yet.
-- Buying or restoring Pro updates access immediately. The guest toggle never unlocks
-  your personal subscription.
+- Buying or restoring a verified subscription updates Pro access immediately. The guest
+  Free/Pro switch does not activate your personal subscription.
 
 <p align="center">
   <img src="assets/screenshots/guide/personal-pro-gemini-permission.png" width="240" alt="personal pro gemini permission"/>
@@ -221,45 +206,28 @@ personal records were sent to Gemini for this test.
   <img src="assets/screenshots/guide/personal-planning-entry.png" width="240" alt="personal planning entry"/>
 </p>
 
-</details>
-
 ## Use every feature
 
-| What you want to do | Where to go |
-|---|---|
-| Check in and talk to Dash | **Dash** — report how you feel; start a Pro voice or text conversation. |
-| Find a good time to focus | **Predictions** — see Pro forecasts, explanations and your week recap. |
-| See your health and activity | **Activity** — steps, sleep, workouts and other available Apple Health data. |
-| Organize a busy day | **Plan** — browse your calendar; use Pro suggestions and Rescue my day. |
-| Turn goals into a schedule | **Tomorrow** — track today's and tomorrow's goals; Pro schedules them. |
-| Make the app yours | **You** — connections, reminders, preferences, voices and subscription. |
-
-You can also see your next activity on the Lock Screen and Dynamic Island, and add a Home
-Screen widget.
-
-<details>
-<summary>Open the complete step-by-step guide, with screenshots of every feature</summary>
-
 The bottom bar has **six tabs**: Dash, Predictions, Activity, Plan, Tomorrow and You.
-The chat button opens the conversation interface; it is not a seventh bottom tab.
+The chat button opens a conversation; it is not a seventh bottom tab.
 
 ### 1. Dash, check-ins and energy states
 
 Open **Dash** for the day's estimate, greeting and next event. Drag Dash to rotate him;
 tap him to start speaking on a supported device. **See all of Dash** opens the character
-showcase with states and gestures. The app also has energy-state icon variants.
+showcase with states and gestures. The app also has different icons for its energy states.
 
 When **How do you feel right now?** appears, tap **Low**, **Okay** or **Good**. The card steps
-aside and your answer adjusts suggestions without changing measured sleep. Check-ins recur
-by time of day. They are useful even while the model is still learning.
+aside and your answer adjusts suggestions without changing measured sleep. Check-ins appear again
+at different times of day. They are useful even while the model is still learning.
 
 ### 2. Predictions and the week's story
 
 Open **Predictions**. Pro sees peak focus, the likely dip and the hourly curve. Scroll for
 the week's story and **You often ask**. The week recap describes better/harder days and
-patterns using available records; it cannot establish a medical cause.
+patterns using available records; it cannot explain the medical reason for a change.
 
-Choose **Why this plan?** to see measured inputs, estimates, missing history and the option
+Choose **Why this plan?** to see the records used, estimates, missing history and the option
 to report how you actually feel. A shared hourly curve is an illustration, not a sensor reading.
 
 <p align="center">
@@ -271,16 +239,16 @@ to report how you actually feel. A shared hourly curve is an illustration, not a
 ### 3. Activity, health coverage and weight
 
 Open **Activity** for steps, active energy, sleep and weight. Scroll for Heart & Body,
-movement, workouts and nutrition **when the source data exists**. Available tiles include
+movement, workouts and nutrition **when those records are available**. Available tiles include
 heart rate, resting HR, HRV, VO₂ max, respiratory rate, mindful minutes, flights, distance,
 stand hours, workout duration/calories/distance, and dietary energy/protein/carbs/fat.
-Missing metrics are omitted rather than shown as invented readings.
+If a reading is missing, the app leaves it out instead of making up a value.
 
 Tap the weight card to **Log weight** in pounds. In personal mode, saving requires Health
 write permission; in the demo it stays in the fictional session. Set optional targets in
 **Make it yours**. Weight does not affect the energy forecast.
 
-**You → What myTwin can read** shows source coverage. Wearables and nutrition apps feed
+**You → What myTwin can read** shows which records are available. Wearables and nutrition apps feed
 myTwin through Apple Health; there is no separate Garmin or MyFitnessPal login in myTwin.
 
 <p align="center">
@@ -294,10 +262,10 @@ Set a **Step goal** in **You → Make it yours**. **Activity** estimates the end
 from steps so far and your usual remaining activity. Enable **Add walks when I'm behind**
 to allow short walks to be added to a free calendar gap.
 
-This opt-in feature can write a walk automatically; it does **not** use the chat Confirm
+Once you turn this feature on, it can add a walk automatically; it does **not** use the chat Confirm
 button. Checks are spaced about two hours apart, limited to three walks per day, with at
 most one pending walk and no night-time scheduling. Health sync and iOS background timing
-can delay checks. Disable the toggle to stop automatic walk additions.
+can delay checks. Turn the setting off to stop adding walks automatically.
 
 ### 5. Day, week and individual calendar days
 
@@ -323,9 +291,9 @@ suggestions; repeated dismissals influence future suggestions.
 5. Tap **Confirm demo change** in the demo, or **Confirm calendar change** in personal mode.
 6. Use **Undo change** on the dashboard if you want to reverse the rescue.
 
-Rescue preserves fixed appointments and only changes the app-managed activities in the
-preview. It changes your plan, not your measured energy. An occupied requested time may
-be shifted to the next free slot, which is explained in the preview.
+Rescue keeps fixed appointments in place. It only changes activities managed by myTwin
+that are shown in the preview. It changes your plan, not your measured energy. If your chosen time is busy, the activity may
+move to the next free slot. The preview explains this.
 
 <p align="center">
   <img src="assets/screenshots/guide/rescue-preview.png" width="240" alt="Rescue preview before confirmation"/>
@@ -335,9 +303,9 @@ be shifted to the next free slot, which is explained in the preview.
 ### 7. Feedback and Up next
 
 After an app-suggested activity ends, answer **Better**, **Same**, **Worse** or **I skipped it**.
-Repeated feedback can change which activities are suggested; small samples are labelled.
-After answering, **Up next** shows the next event and a short contextual tip. Feedback stays
-local. It does not prove that an activity changed your health.
+Your feedback can change future suggestions. The app tells you when it only has a few responses.
+After answering, **Up next** shows the next event and a short tip for that activity. Feedback stays
+on your device. It does not prove that an activity changed your health.
 
 ### 8. Today's goals, editing, completion and streaks
 
@@ -363,12 +331,12 @@ Open **Tomorrow**: the top of this page also manages **today**.
 1. In **Tomorrow**, scroll to **Goals for …** and write one goal per line.
 2. Add lengths or times naturally: `Finish lit review, 2 hrs, morning`, `Call mom at 7pm`,
    `Gym 45 min`. Or tap **Say your goals**, speak, and finish the recording.
-3. Review the text. On-device goal splitting only retains words you actually said.
+3. Review the text. The app separates your spoken goals on your device, using only words you actually said.
 4. Tap **Done** to close the keyboard.
-5. Pro: tap **Plan my day tomorrow**. This action writes the planned goals to the calendar;
-   it is not a chat proposal awaiting a second Confirm button.
-6. Tap a planned time, adjust it, then **Save**. Planning again preserves chosen times and
-   reports whether anything new was scheduled. Overlaps are flagged.
+5. Pro: tap **Plan my day tomorrow**. This saves the planned goals to your calendar
+   right away. You do not need to tap a second Confirm button as you do in chat.
+6. Tap a planned time, adjust it, then **Save**. Planning again keeps your chosen times and
+   tells you whether it added anything. The app points out overlapping times.
 
 Free can write, edit, complete and carry goals; scheduling opens the Pro paywall. Planned
 goals receive event reminders, and permitted notifications provide a morning list and an
@@ -384,8 +352,8 @@ evening completion reminder. **Plan tomorrow** is available on Dash all day, in 
 
 Scroll to tomorrow's outlook. Change expected sleep with the stepper and compare the result.
 It uses the shipped model with assumed typical sleep quality/stages and resting heart rate.
-It needs seven recent usable nights; otherwise it says **Still learning**. It shows a possible outcome, not a promise about how you will feel. It does not change
-your Apple Health records.
+It needs seven recent usable nights; otherwise it says **Still learning**. It is not a
+proven prediction of how your body will feel tomorrow. It does not change Apple Health records.
 
 <p align="center">
   <img src="assets/screenshots/guide/tomorrow-prediction.png" width="240" alt="Tomorrow outlook"/>
@@ -395,22 +363,22 @@ your Apple Health records.
 ### 11. Start a conversation, or let Dash speak first
 
 Dash may speak up about a low-energy meeting, a coming dip, an upcoming suggestion, a step
-walk, prolonged sitting or a week recap. He spaces nudges and respects quiet hours.
+walk, prolonged sitting or a week recap. He leaves time between check-ins and respects quiet hours.
 
 **Free:** read the one-line card and choose **Tell me more** or **Not now**.
 
 **Pro with Gemini enabled:**
 
-1. Tap **Start conversation** on Dash, or answer an automatic check-in. It uses today's calendar, goals and available forecast. You do not need a completed health baseline to start manually.
-2. When Dash finishes speaking, the mic opens after a short pause.
+1. Tap **Start conversation** on Dash, or answer an automatic check-in. It uses today's calendar, goals and available forecast. You do not need enough health history for a forecast to start manually.
+2. After Dash finishes speaking, the app waits briefly to avoid echo, then opens the mic automatically.
 3. Answer aloud; about **three seconds of silence** sends the reply. Tap **Send voice message**
    (or Dash) to send sooner. The recognised words appear on the card.
-4. Or tap **Type your answer** and Send. Typing stops dictation so both inputs cannot send together.
+4. Or tap **Type your answer** and Send. Typing stops voice input so the app does not send both at once.
 5. Dash remembers the conversation, coaches briefly and asks a follow-up question.
 6. Tap **End**, say “thanks, that's all,” or remain silent for about **30 seconds** to finish.
    Typing mode has no silence countdown.
 
-If your personal account appears locked, check **You → myTwin Pro** or restore purchases from the paywall. The demo switch does not grant a personal subscription. Your Pro access updates when the purchase or restore completes.
+If your personal account appears locked, check **You → myTwin Pro** or restore purchases from the paywall. The demo switch does not grant a personal subscription. After a verified purchase or restore, Pro access updates before the purchase screen closes.
 
 The mentor uses **Gemini-generated voice**, with no local-voice fallback. It requires Pro,
 your permission, internet access and a Gemini key. A microphone problem still allows typed replies.
@@ -428,14 +396,14 @@ a longer pause than the mentor. Speech recognition runs on-device.
 
 Try: “What do I have tomorrow?”, “Which goals are left?”, or “How did my week go?” Regular
 chat uses Apple Foundation Models when available; Pro can use Gemini with consent and
-internet. Dash can use your calendar, health summary, daily plan, week recap, goals and streaks
-to answer your questions.
+internet. Dash can use today's and this week's calendar, your health summary, today's plan, week recap,
+and today's and tomorrow's goals and streaks to answer you.
 
 To add, move or remove **today's** calendar events, ask Dash, review the proposal and tap
 **Confirm**. **Cancel** discards it. A generated reply alone does not save an event.
 
 **You often ask** collects repeated questions over the last two weeks and provides starters
-for new users. Pro shows saved answers and can ask again; Free shows the upgrade gate.
+for new users. Pro shows saved answers and can ask again; Free asks you to upgrade.
 Demo questions do not enter your personal question history.
 
 ### 13. Preferences, voices and quiet hours
@@ -448,13 +416,13 @@ Open **You → Make it yours**:
 | Bedtime | Set your usual bedtime; planning uses it for coffee/wind-down timing. |
 | Step / active-energy / weight targets | Enable only the optional targets you want and enter values. |
 | Sleep goal | Adjust the hours; this also seeds tomorrow's expected sleep. |
-| Add walks when I'm behind | Opt into automatic step-walk calendar additions. |
+| Add walks when I'm behind | Allow the app to add walks to your calendar when you are behind your step goal. |
 | Morning / event / wind-down reminders | Choose which reminder types you want. |
 | Bedtime in my calendar | Add/update an app-managed bedtime event; switch off to remove it. |
 | Quiet hours | Choose start/end; equal times disable quiet hours. |
 
-Tap **Save**, or **Cancel** to discard preference edits. These are user-selected targets,
-not medically prescribed goals. Calendar reminders and goals also require notification access.
+Tap **Save**, or **Cancel** to discard preference edits. You choose these targets yourself;
+they are not medical recommendations. Calendar reminders and goals also require notification access.
 
 Open **You → Dash's voice** to select an available iPhone voice or a Pro Gemini voice.
 iPhone previews use system speech; Gemini's selected voice is used in Gemini sessions.
@@ -478,14 +446,12 @@ push server continuously advancing it while the app stays closed.
 
 HealthKit background delivery can refresh the estimate and step check when sources sync.
 Notifications include morning check-ins, event reminders, wind-down, step walks and goal
-reminders. iOS controls delivery and background execution; neither is an exact-time guarantee.
+reminders. iOS controls delivery and background execution; updates and reminders may arrive later than expected.
 
 <p align="center">
   <img src="assets/screenshots/guide/dynamic-island.png" width="240" alt="Up next in Dynamic Island"/>
   <img src="assets/screenshots/guide/lock-screen.png" width="240" alt="Up next on the Lock Screen"/>
 </p>
-
-</details>
 
 ## Free versus Pro
 
@@ -498,11 +464,11 @@ reminders. iOS controls delivery and background execution; neither is an exact-t
 | Write/edit/complete/carry goals; streaks and celebrations | ✓ | ✓ |
 | On-device chat, when Apple Intelligence is available | ✓ | ✓ |
 | Hourly forecast and tomorrow sleep what-if | Locked | ✓ |
-| Suggestions based on estimated energy and Rescue my day | Locked | ✓ |
+| Energy-aware suggestions and Rescue my day | Locked | ✓ |
 | Plan remaining goals today / plan tomorrow | Locked | ✓ |
 | Answers and shortcuts on You often ask | Locked | ✓ |
-| Gemini answers and Gemini voice | Locked | With permission, key and internet |
-| Dash conversations with voice and typed replies | One-line card | With Gemini |
+| Gemini answers and Gemini voice | Locked | With permission, a key and internet |
+| Proactive mentor with voice and typed replies | One-line card | With Gemini |
 
 In personal mode, choose **You → Get myTwin Pro** or tap a locked feature. Select an available
 plan on the paywall. An existing subscriber can use **myTwin Pro → Manage or restore your plan**
@@ -539,12 +505,6 @@ only the demo.
 
 ## Configure integrations
 
-The basic guest demo is ready to run. To talk to Dash, add a Gemini key using the steps
-below. For your own calendar and health records, allow access during personal setup.
-
-<details>
-<summary>Open setup instructions for Gemini, Apple Health, Calendar and RevenueCat</summary>
-
 ### Apple Health and Calendar
 
 Use the onboarding Connect buttons or **You**. Review app permissions in iOS Settings/Health
@@ -557,7 +517,7 @@ demo's filled charts for evidence that personal data has connected.
 
 ### Gemini: required for the Pro mentor
 
-1. Obtain a Gemini API key from [Google AI Studio](https://aistudio.google.com/apikey).
+1. Get a Gemini API key from [Google AI Studio](https://aistudio.google.com/apikey).
 2. From the repository root:
 
    ```sh
@@ -567,21 +527,21 @@ demo's filled charts for evidence that personal data has connected.
 3. Replace `your-key-here` in `Secrets.xcconfig` with your key, without quotes. Do not paste
    the key into Swift, the README or screenshots. This file is git-ignored.
 4. Rebuild: `Base.xcconfig` includes the optional secret and the app reads `GeminiAPIKey`
-   from its built Info.plist. Runtime editing of the source file does not update an installed app.
+   from its built Info.plist. Changing this file does not update an app already installed on your phone.
 5. Use Pro or the Pro demo, stay online, and allow Gemini when asked. Personal mode also has
    **You → Change Gemini permission**.
 6. Choose a Gemini voice under **Dash's voice**, then test typed input first.
 
-The client uses `gemini-3.8-live` over the Gemini Live WebSocket API. Spoken input is
-transcribed locally; Gemini streams audio and its text transcription. A conversation waits
+The client uses `gemini-3.8-live` over the Gemini Live WebSocket API. Your device turns your speech
+into text. Gemini sends back spoken audio and the text of its reply. A conversation waits
 for the server's completed turn and local playback before automatic listening resumes.
 Model availability, quota and billing depend on your Google project. See Google's
 [Live API guide](https://ai.google.dev/gemini-api/docs/live-api/capabilities).
 
-Without a working key/consent/internet, the visual demo still works and regular chat can
+Without a working key, your permission or internet, the visual demo still works and regular chat can
 use Apple's model where available. **The Pro mentor has no local-model/voice fallback.**
 The development key is embedded in the installed client; a public production release needs
-a considered credential strategy rather than treating a bundled secret as protected.
+a secure way to handle keys. A key included in the app is not protected.
 
 ### RevenueCat: existing demo or your own project
 
@@ -607,24 +567,22 @@ Verify the app's HealthKit entitlement, microphone/speech/calendar/Health usage 
 Live Activity support and the extension's bundle/signing settings. No custom backend or
 push-notification server is implemented for the Live Activity.
 
-</details>
-
 ## Privacy and calendar writes
 
-| Feature | What happens |
+| Path | What happens |
 |---|---|
 | Local model / speech | Supported Apple on-device services process answers/transcription. |
-| Gemini allowed + Pro online | With your permission, Google can receive your questions and the calendar, goals, health summary, forecast or week recap needed to answer them. |
+| Gemini allowed + Pro online | Google can receive your questions and the records Dash needs to answer: calendar, goals, health summary, forecast and week recap. It is **not questions only**. |
 | Guest demo | Fictional health/calendar/goals; no real Health/calendar writes from demo actions. |
 | Local profile/preferences/goals/history | Stored locally; not an app-managed cloud account. |
 | RevenueCat | Handles subscription state with the SDK's app user identity. |
 | Chat/mentor calendar proposal | Saved only by **Confirm**; Cancel discards. |
 | Rescue | Preview, then explicit confirmation; undo is available. |
 | Goal planning/time edits | Pressing the planning button or Save writes the selected changes. |
-| Automatic walks / bedtime | Optional settings authorize app-managed calendar writes. |
+| Automatic walks / bedtime | Turning on these settings lets myTwin add or update these calendar events. |
 
-Turn Gemini off in **You** to stop future Gemini use. Revoking consent ends the active
-mentor. The app is a planning/wellness prototype, not a medical device.
+Turn Gemini off in **You** to stop future Gemini use. Turning off permission ends the current
+conversation with Dash. The app is a planning/wellness prototype, not a medical device.
 
 ## Troubleshooting
 
@@ -645,14 +603,10 @@ mentor. The app is a planning/wellness prototype, not a medical device.
 
 ## Testing and screenshots
 
-We checked the main flows with **90 unit tests and 15 app walkthroughs**, including
-personal Pro access and a Gemini conversation. The **54 screenshots** are real app captures
-from Simulator. Personal-mode images use a clean sample profile, not private phone records.
-
-Voice input, echo handling, Bluetooth and live Health syncing still need testing on a phone.
-
-<details>
-<summary>For developers: test commands and screenshot details</summary>
+The mentor passed **90 code tests (unit tests) and two Simulator app tests (UI tests)** on
+30 September 2026. Five Gemini conversations using fictional data completed with several replies and audio.
+Five more calendar proposals passed checks of the final confirmation wording. These results
+cover the checks we ran; they do not mean every feature has been tested on every device.
 
 ```sh
 # Pick an installed simulator first.
@@ -666,8 +620,8 @@ TEST_RUNNER_MYTWIN_LIVE_TESTS=1 xcodebuild test   -project myTwin.xcodeproj -sch
 TEST_RUNNER_MYTWIN_README_SHOTS=1 xcodebuild test   -project myTwin.xcodeproj -scheme myTwin   -destination 'platform=iOS Simulator,name=YOUR_INSTALLED_IPHONE'   -only-testing:myTwinUITests/ReadmeScreenshotTests   -only-testing:myTwinUITests/ReadmeDetailScreenshotTests   -only-testing:myTwinUITests/ReadmeForecastScreenshotTests   -only-testing:myTwinUITests/ReadmeLiveActivityScreenshotTests
 ```
 
-The documentation capture also passed nine main walkthroughs, five detail/live walkthroughs,
-and a personal Pro Test Store integration check. After the personal-mode fixes, all 90 unit
+While capturing screenshots, nine main app walkthroughs, five detailed/live walkthroughs
+and a personal Pro test using Test Store also passed. After the personal-mode fixes, all 90 unit
 tests passed again. To repeat the personal Pro check against the configured Test Store:
 
 ```sh
@@ -677,14 +631,17 @@ TEST_RUNNER_MYTWIN_TEST_STORE=1 xcodebuild test \
   -only-testing:myTwinUITests/PersonalProUITests
 ```
 
-This test accepts only RevenueCat's explicitly labelled simulated purchase sheet.
+This test only accepts RevenueCat's purchase screen when it clearly says the purchase is simulated.
 
-See the [screenshot notes](assets/screenshots/guide/README.md) for capture details and the
-[verification notes](docs/verification.md) for device checks. Earlier mentor testing also
-included two UI checks, five multi-turn Gemini conversations with fictional data and five
-calendar-proposal checks.
+Fresh screenshots in `assets/screenshots/guide/` come from the app, not mockups. See the
+[screenshot notes](assets/screenshots/guide/README.md) for modes and dates. Personal-mode
+images are explicitly labelled clean sample-profile captures; no private phone records
+are presented as demo data. Original Dash renders/animations and earlier screenshots remain
+in the repository.
 
-</details>
+We still need to check the microphone, echo, Bluetooth, three-second reply timing, Health
+sync, background updates and notification timing on a real phone. See
+[verification notes](docs/verification.md) and [ML documentation](ml/README.md).
 
 ## Meet Dash
 
@@ -697,9 +654,6 @@ glow come from your real energy estimate, so you can read your day from across t
 - 🎬 **9 animation clips** on one timeline, exported as a single USDZ
 - 🔆 Real-time lighting: his room and platform glow in the colour of your battery
 - 👆 Drag to spin him; tap him to talk
-
-<details>
-<summary>See Dash’s energy states, animations and character art</summary>
 
 ### Four energy states
 
@@ -750,41 +704,27 @@ exhausted. He also waves to get your attention when he has something to tell you
 
 ---
 
-</details>
-
 ## Honest limits
 
-The model found small improvements in tracking day-to-day changes, but it did not improve
-the accuracy of exact scores. Treat the percentage and hourly curve as a guide, not a precise
-measurement. The [model write-up](ml/README.md) explains the results and limitations.
-
-<details>
-<summary>Read the model evaluation results</summary>
-
-The model predicts **direction, not a number**. Measured with leave-one-person-out
-evaluation on [PMData](https://datasets.simula.no/pmdata/) (16 people, 1,747 labelled days):
+The model aims to predict **whether energy goes up or down, rather than an exact score**.
+We tested it on each person using a model trained on the other people (leave-one-person-out
+evaluation), using [PMData](https://datasets.simula.no/pmdata/) (16 people, 1,747 labelled days):
 
 | Target | Mean within-person correlation | People improved | Wilcoxon p |
 |---|---|---|---|
 | Fatigue | -0.054 → +0.103 | 12/16 | 0.0034 |
 | Readiness | +0.051 → +0.124 | 14/16 | 0.0021 |
 
-Readiness MAE is 1.152 for the baseline and 1.155 for the model: absolute accuracy does not
-improve. That's why the app shows the percentage and hourly curve as **illustrations**, not
+The average error in readiness scores (MAE) is 1.152 for the baseline and 1.155 for the
+model. The model does not improve the accuracy of exact scores. That's why the app shows the percentage and hourly curve as **illustrations**, not
 measurements of a body battery, and says so on screen.
 
 A second dataset, LifeSnaps (71 people), gave no usable signal: within a person, tiredness
 tracked the hour of the day and nothing else. That negative result, and why a five-weight
 ridge regression beat LightGBM, is written up in [`ml/README.md`](ml/README.md).
 
-</details>
 
 ## Project layout
-
-Built with SwiftUI, RealityKit, Apple Health, Apple on-device models, Gemini and RevenueCat.
-
-<details>
-<summary>For developers: where the code lives</summary>
 
 | Path | Purpose |
 |---|---|
@@ -804,8 +744,6 @@ Built with SwiftUI, RealityKit, Apple Health, Apple on-device models, Gemini and
 
 Training datasets are not bundled; consult `ml/README.md` and the source dataset licences
 before downloading or reusing them.
-
-</details>
 
 ## Licence
 
