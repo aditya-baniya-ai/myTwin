@@ -22,6 +22,10 @@ final class ChatManager {
 
     private let session: LanguageModelSession
     private let geminiChat: GeminiChat
+    /// The chat's tools, shared with Dash's check-in conversations.
+    private let tools: [any Tool]
+    /// One per conversation with Dash, so it remembers what he asked and what you said.
+    private let mentorChat: GeminiChat
     /// Filled in by ContentView, which knows the day's charge, bedtime and dismissals.
     let planSource = TodayPlanSource()
 
@@ -31,12 +35,13 @@ final class ChatManager {
         let planSource = self.planSource
         geminiChat = GeminiChat(access: gemini, voice: voice, calendar: calendar, health: health,
                                 plan: planSource)
+        mentorChat = GeminiChat(access: gemini, voice: voice, calendar: calendar, health: health,
+                                plan: planSource, mentor: true)
         // Wording tested against Apple's safety filter: giving the assistant a name plus the date
         // got calendar questions blocked, and without the rules about saving the model claimed it
         // had changed events. The name alone is fine, and without it the model invented one
         // ("Justin AI") when asked. Tested on the Mac: naming it changed no other answer.
-        session = LanguageModelSession(
-            tools: [
+        tools = [
                 TodayEventsTool(calendar: calendar),
                 WeekEventsTool(calendar: calendar),
                 AddEventTool(calendar: calendar),
@@ -46,7 +51,9 @@ final class ChatManager {
                 TodayPlanTool(plan: planSource),
                 WeekRecapTool(plan: planSource),
                 GoalsTool(plan: planSource),
-            ],
+            ]
+        session = LanguageModelSession(
+            tools: tools,
             instructions: """
             You are the user's own assistant in the myTwin app, and your name is myTwin.
             When the user asks your name, or who or what you are, reply exactly: I'm myTwin, your energy twin.
@@ -114,6 +121,37 @@ final class ChatManager {
             messages.append(ChatMessage(isUser: false, text: reply))
         }
     }
+
+    // MARK: - Dash's check-ins
+
+    var canMentor: Bool { proEnabled && gemini.isActive }
+
+    func startMentor() {
+        geminiChat.close()
+        mentorChat.close()
+    }
+
+    func endMentor() {
+        mentorChat.close()
+        calendar.pendingChange = nil
+    }
+
+    /// Gemini supplies both the response and its voice. Never substitute local speech.
+    func mentor(_ prompt: String, onWords: @escaping (String) -> Void) async -> Bool {
+        guard canMentor else { return false }
+        calendar.pendingChange = nil
+        return await mentorChat.answer(prompt, onWords: onWords)
+    }
+
+    static let mentorInstructions = """
+    You are Dash, the user's energy coach in the myTwin app, in a short spoken check-in with them.
+    Coach them: help them decide what matters today and how to fit it around their energy. Ask one short question at a time.
+    Before your first line, use the tools to look at their day: getTodayEvents, getGoals and getTodayPlan. Use getHealthSummary, getWeekEvents or getWeekRecap when they come up.
+    Only mention events, goals and numbers the tools return.
+    Whenever you mention an energy peak or dip, call it an estimate or say it might happen; never say it will happen. Give general wellness tips only, never medical advice.
+    Everything you say is spoken aloud: at most two short sentences, then exactly one short question. No lists or formatting. Omit the question only when the user ends the conversation or needs to tap Confirm.
+    To add, move or remove one of today's events, use addEvent, moveEvent or removeEvent. They only suggest it: the user taps Confirm. Until the user taps Confirm, describe a proposal as: I suggest the change. Tap Confirm to save it. Never say you scheduled, moved, added, removed, saved or completed an event before confirmation.
+    """
 
     /// Streams Gemini's words into one message as they arrive.
     private func answerWithGemini(_ text: String) async -> Bool {

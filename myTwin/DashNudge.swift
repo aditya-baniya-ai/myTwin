@@ -3,7 +3,7 @@ import Foundation
 /// Something Dash brings up on his own instead of waiting to be asked.
 struct DashNudge: Equatable {
     enum Kind: String, CaseIterable {
-        case lowEnergyEvent, dipSoon, suggestionSoon, sitting, weekRecap
+        case lowEnergyEvent, dipSoon, suggestionSoon, stepWalk, sitting, weekRecap
     }
 
     let kind: Kind
@@ -28,6 +28,8 @@ enum DashNudges {
         let suggestions: [PlanItem]          // what myTwin suggested
         let stepsLastTwoHours: Double?
         let hasWeekRecap: Bool
+        /// What the step check said when it last booked a walk, while that walk is still ahead.
+        var stepWalk: String? = nil
     }
 
     static let gapBetweenNudges: TimeInterval = 90 * 60
@@ -74,6 +76,12 @@ enum DashNudges {
             found.append(.init(kind: .suggestionSoon,
                 line: "Coming up at \(clock(item.start)): \(item.title).\(why)",
                 question: "Why do you suggest \(item.title) at \(clock(item.start))?"))
+        }
+
+        // Behind on steps, and a walk is already on the calendar for it.
+        if let walk = s.stepWalk {
+            found.append(.init(kind: .stepWalk, line: walk,
+                question: "How can I close the gap on my steps today?"))
         }
 
         // Daytime, and barely a step in two hours. Watches like Garmin sync to Health only a

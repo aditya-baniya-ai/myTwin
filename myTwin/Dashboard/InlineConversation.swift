@@ -134,6 +134,93 @@ struct InlineConversation: View {
     }
 }
 
+/// A check-in with Dash (Pro): his latest line, whether he's talking or listening, a box
+/// for typing an answer when you can't talk out loud, and a way to end it.
+struct MentorCard: View {
+    let line: String
+    let state: MentorConversation.State
+    let transcript: String
+    let isRecording: Bool
+    let isRequesting: Bool
+    let talk: () -> Void
+    let beginTyping: () -> Void
+    let change: CalendarChange?
+    let answer: (String) -> Void
+    let end: () -> Void
+    let confirm: () -> Void
+    let cancel: () -> Void
+
+    @State private var typed = ""
+    @FocusState private var typing: Bool
+
+    private var status: (text: String, symbol: String) {
+        switch state {
+        case .thinking: ("Dash is thinking…", "ellipsis")
+        case .speaking: ("Dash is talking", "waveform")
+        case .listening: ("Listening. Just answer", "mic.fill")
+        case .typing: ("Type your answer", "keyboard")
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label(status.text, systemImage: status.symbol)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(state == .listening ? Color.red : Color.secondary)
+                    .symbolEffect(.pulse, isActive: state == .listening || state == .thinking)
+                Spacer()
+                Button("End", action: end).font(.subheadline.weight(.semibold))
+            }
+            if line.isEmpty {
+                ProgressView().frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                Text(line).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+            }
+            if let change {
+                Text(change.question).font(.subheadline.weight(.semibold))
+                HStack {
+                    Button("Cancel", action: cancel).buttonStyle(.bordered).disabled(isRequesting)
+                    Button("Confirm", action: confirm).buttonStyle(.borderedProminent).tint(BrandTitle.brand[1]).disabled(isRequesting)
+                }
+            }
+            if !transcript.isEmpty {
+                Text(transcript).font(.subheadline).foregroundStyle(.secondary)
+            }
+            Button(isRecording ? "Send voice message" : "Talk to Dash",
+                   systemImage: isRecording ? "arrow.up.circle.fill" : "mic.fill", action: talk)
+                .disabled(isRequesting)
+            HStack(spacing: 8) {
+                TextField("Type your answer", text: $typed)
+                    .focused($typing)
+                    .submitLabel(.send)
+                    .onSubmit(send)
+                    .disabled(isRequesting)
+                    .onChange(of: typing) { _, focused in if focused { beginTyping() } }
+                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .background(Color(.tertiarySystemFill), in: .capsule)
+                Button("Send", systemImage: "arrow.up.circle.fill", action: send)
+                    .accessibilityIdentifier("mentor.send")
+                    .labelStyle(.iconOnly).font(.title2)
+                    .disabled(isRequesting || typed.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.regularMaterial, in: .rect(cornerRadius: 22))
+        .shadow(color: .black.opacity(0.3), radius: 16, y: 6)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Conversation with Dash")
+    }
+
+    private func send() {
+        let text = typed
+        typed = ""
+        typing = false
+        answer(text)
+    }
+}
+
 /// Something Dash brought up himself, with a way to take him up on it or not.
 struct NudgeCard: View {
     let nudge: DashNudge

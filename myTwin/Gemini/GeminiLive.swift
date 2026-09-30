@@ -94,14 +94,13 @@ final class GeminiLive {
         if let words = (content["outputTranscription"] as? [String: Any])?["text"] as? String {
             continuation.yield(.words(words))
         }
-        // "generationComplete" arrives once everything is sent. "turnComplete" comes seconds
-        // later, when Gemini assumes playback has finished, so it isn't used.
-        // Gemini stops generating when it decides you spoke over it. Without this the app
-        // waits for an answer that will never finish arriving.
+        // Wait for the server to finish the turn before allowing another user message.
+        // generationComplete only ends generation; sending during its playback window
+        // can drop the next message. Local playback is awaited separately by the mentor.
         if content["interrupted"] as? Bool == true {
             continuation.yield(.interrupted)
         }
-        if content["generationComplete"] as? Bool == true {
+        if content["turnComplete"] as? Bool == true {
             continuation.yield(.answerComplete)
         }
     }

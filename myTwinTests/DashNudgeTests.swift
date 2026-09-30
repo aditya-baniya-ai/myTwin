@@ -59,6 +59,23 @@ final class DashNudgeTests: XCTestCase {
         XCTAssertTrue(nudge!.line.contains("You're down to 40%."), nudge!.line)
     }
 
+    /// The step check's walk comes after a suggestion about to start, and before a long sit.
+    func testStepWalkSaysWhatTheStepCheckSaid() {
+        let now = at(14)
+        let walk = "You're at 6,420 of 8,000 steps. A 5-minute walk at 2:05 PM is on your calendar."
+        var s = situation(now: now, steps: 100)
+        s.stepWalk = walk
+        XCTAssertEqual(kinds(s), [.stepWalk, .sitting])
+        XCTAssertEqual(DashNudges.candidates(s).first?.line, walk)
+        XCTAssertFalse(kinds(situation(now: now)).contains(.stepWalk), "no walk booked, nothing to say")
+
+        let nap = PlanItem(kind: .suggestion, title: "Power nap", start: now.addingTimeInterval(600),
+                           end: now.addingTimeInterval(1800))
+        var both = situation(now: now, suggestions: [nap])
+        both.stepWalk = walk
+        XCTAssertEqual(kinds(both), [.suggestionSoon, .stepWalk])
+    }
+
     /// No step data is not the same as no steps: the watch may simply not have synced.
     func testSittingOnlyInDaytimeAndOnlyWithStepData() {
         XCTAssertTrue(kinds(situation(now: at(11), steps: 100)).contains(.sitting))

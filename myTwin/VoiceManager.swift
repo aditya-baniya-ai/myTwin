@@ -54,6 +54,12 @@ final class VoiceManager {
     /// Where this dictation goes instead of the chat, such as the goals box. Cleared when
     /// the dictation ends.
     private var dictationTarget: ((String) -> Void)?
+    /// A reply in a conversation with Dash: it ends by itself after a short silence, or gives
+    /// up if nothing is said. Nil for tap-to-talk, which only your tap ends.
+    private var autoEnd: (pause: TimeInterval, giveUp: TimeInterval, onSilence: () -> Void)?
+    /// When the microphone last heard something as loud as speech. Silence is judged by this,
+    /// not by when words arrive: the recogniser delivers them seconds late and in bursts.
+    private var lastLoud = Date.distantPast
 
     /// One line of plain status, shown on both the home screen and the chat.
     var statusNote: String? {
@@ -78,6 +84,8 @@ final class VoiceManager {
     private let geminiFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 24_000,
                                              channels: 1, interleaved: false)!
     private var speechConverter: AVAudioConverter?
+    private var playbackGeneration = 0
+    private var dictationGeneration = 0
     private var queuedSpeech = 0         // pieces of Gemini's voice waiting to play
     private var speechCut = false        // you talked over Gemini: skip the rest of that answer
     /// An answer is still arriving from Gemini. Its audio comes in pieces over the network,
@@ -182,7 +190,7 @@ final class VoiceManager {
         isDictating = false
         isFinishing = false
         dictationStarted = nil
-        dictationTarget = nil
+        dictationTarget = nil; autoEnd = nil
         onSentence = nil
         stopSpeaking()
 
@@ -212,6 +220,29 @@ final class VoiceManager {
 
     // MARK: - Tap to talk
 
+    /// Your turn in a conversation with Dash: no tap and no "twin". What you say goes to
+    /// `target` once you've been quiet for `pause` seconds; if you say nothing for `giveUp`
+    /// seconds, `onSilence` is called instead. Returns false when the microphone isn't ready.
+    @discardableResult
+    func listenForReply(pause: TimeInterval = 3, giveUp: TimeInterval = 30,
+                        target: @escaping (String) -> Void, onSilence: @escaping () -> Void) -> Bool {
+        guard status == .listening, !isInterrupted else { return false }
+        startDictation(into: target)
+        autoEnd = (pause, giveUp, onSilence)
+        lastLoud = .distantPast
+        return true
+    }
+
+    /// Returns once Dash has stopped talking and the echo of his voice has died away, so the
+    /// microphone can open without hearing him.
+    func waitUntilQuiet() async {
+        try? await Task.sleep(for: .milliseconds(300))     // speech takes a moment to start
+        while !Task.isCancelled && (synthesizer.isSpeaking || queuedSpeech > 0 || geminiAnswering || isSpeakingNow) {
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        try? await Task.sleep(for: echoTail)
+    }
+
     /// A dictation whose words go to `target` rather than to Dash.
     func startDictation(into target: @escaping (String) -> Void) {
         guard status == .listening else { return }
@@ -222,8 +253,9 @@ final class VoiceManager {
     /// Starts a dictation that you end yourself, so no pause is ever taken for the end.
     func startDictation() {
         guard status == .listening else { return }
+        dictationGeneration += 1
         stopSpeaking()                  // tapping Dash while he talks means you want the floor
-        dictationTarget = nil
+        dictationTarget = nil; autoEnd = nil
         isDictating = true
         isAwake = true
         dictationStarted = .now
@@ -244,6 +276,7 @@ final class VoiceManager {
     func finishDictation() {
         guard isDictating, !isFinishing else { return }
         isFinishing = true
+        let generation = dictationGeneration
         let tap = CMTime(seconds: audioFed, preferredTimescale: 1000)
         let analyzer = analyzer
         var finalized = false
@@ -257,7 +290,7 @@ final class VoiceManager {
                 try? await Task.sleep(for: .milliseconds(100))
             }
             try? await Task.sleep(for: .milliseconds(150))   // its last results are still arriving
-            guard let self else { return }
+            guard let self, generation == dictationGeneration else { return }
             isFinishing = false
             guard isDictating else { return }
             isDictating = false
@@ -269,7 +302,7 @@ final class VoiceManager {
             pieces = []
             lastHeard = .now
             let target = dictationTarget ?? onSentence
-            dictationTarget = nil
+            dictationTarget = nil; autoEnd = nil
             if !sentence.isEmpty { target?(withoutWakePhrase(sentence)) }
         }
     }
@@ -277,7 +310,8 @@ final class VoiceManager {
     /// Ends the dictation and throws away what was said.
     func cancelDictation() {
         guard isDictating else { return }
-        dictationTarget = nil
+        dictationGeneration += 1
+        dictationTarget = nil; autoEnd = nil
         isDictating = false
         isFinishing = false
         isAwake = false
@@ -343,6 +377,9 @@ final class VoiceManager {
     }
 
     func stopSpeaking() {
+        playbackGeneration += 1
+        queuedSpeech = 0
+        speechCut = true
         nonEchoResults = 0
         geminiAnswering = false
         speechEndTask?.cancel()
@@ -359,6 +396,7 @@ final class VoiceManager {
 
     /// Call as each Gemini answer starts, so it plays even if you cut off the last one.
     func startGeminiAnswer() {
+        stopSpeaking()
         speechCut = false
         lastSpoken = ""
         geminiAudioStarted = nil
@@ -381,7 +419,13 @@ final class VoiceManager {
         isSpeakingNow = true
         if geminiAudioStarted == nil { geminiAudioStarted = .now }
         // The manager lives as long as the app, so holding it until the piece plays is fine.
-        player.scheduleBuffer(buffer) { Task { @MainActor in self.queuedSpeech -= 1 } }
+        let generation = playbackGeneration
+        player.scheduleBuffer(buffer, completionCallbackType: .dataPlayedBack) { _ in
+            Task { @MainActor in
+                guard generation == self.playbackGeneration else { return }
+                self.queuedSpeech -= 1
+            }
+        }
         if speechEndTask == nil { watchForSpeechEnd() }
     }
 
@@ -455,6 +499,7 @@ final class VoiceManager {
             pieces = []
             sentUpTo = latestResultEnd
             lastHeard = .now
+            speechEndTask = nil
         }
     }
 
@@ -499,6 +544,7 @@ final class VoiceManager {
             Task { @MainActor in
                 self?.inputLevel = level
                 self?.audioFed += seconds
+                if level > 0.3 { self?.lastLoud = .now }
             }
         }
         engine.prepare()
@@ -519,7 +565,7 @@ final class VoiceManager {
                 case .began:
                     isInterrupted = true
                     isDictating = false          // whatever you were saying is lost with the microphone
-                    dictationTarget = nil
+                    dictationTarget = nil; autoEnd = nil
                     isFinishing = false
                     dictationStarted = nil
                     isAwake = false
@@ -662,7 +708,21 @@ final class VoiceManager {
 
                 // Tap to talk only ever ends with your tap: the recogniser reports seconds
                 // late and in bursts, so "no new words for a while" happened mid-sentence.
-                if isDictating { continue }
+                // A reply to Dash ends when the microphone itself has gone quiet.
+                if isDictating {
+                    guard let auto = autoEnd, !isFinishing, !isSpeakingNow else { continue }
+                    if sentence.isEmpty {
+                        if let started = dictationStarted, Date.now.timeIntervalSince(started) > auto.giveUp {
+                            cancelDictation()
+                            auto.onSilence()
+                        }
+                    } else {
+                        // A soft voice may never count as loud: then the last words heard stand in.
+                        let quietSince = lastLoud == .distantPast ? lastHeard : lastLoud
+                        if Date.now.timeIntervalSince(quietSince) > auto.pause { finishDictation() }
+                    }
+                    continue
+                }
 
                 if sentence.isEmpty {
                     if !isSpeakingNow, quietFor > sleepAfterIdle { isAwake = false }

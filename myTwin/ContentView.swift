@@ -29,6 +29,8 @@ struct ContentView: View {
     @State private var stepPace: StepPace?
     @State private var demoStepLog = StepCheck.Log()
     @State private var goals: GoalBook
+    /// Dash's spoken check-in, when he starts one (Pro).
+    @State private var mentor: MentorConversation
     /// Dash acting out how today's goals went, over any page.
     @State private var moment: DashMoment?
 
@@ -94,7 +96,9 @@ struct ContentView: View {
         _calendar = State(initialValue: calendar)
         _voice = State(initialValue: voice)
         _gemini = State(initialValue: gemini)
-        _chat = State(initialValue: ChatManager(calendar: calendar, health: health, gemini: gemini, voice: voice))
+        let chat = ChatManager(calendar: calendar, health: health, gemini: gemini, voice: voice)
+        _chat = State(initialValue: chat)
+        _mentor = State(initialValue: MentorConversation(chat: chat, voice: voice))
     }
 
     var body: some View {
@@ -131,10 +135,12 @@ struct ContentView: View {
         .safeAreaInset(edge: .bottom) { bottomBar }
         // The keyboard covers the tab bar instead of pushing it up. Removing the bar while
         // typing re-laid out every page mid-animation and could leave the app never settling.
-        .ignoresSafeArea(.keyboard, edges: .bottom)
+        // In a check-in the bar holds a box to type your answer, so it rises with the keyboard.
+        .ignoresSafeArea(mentor.isActive ? [] : .keyboard, edges: .bottom)
         .task {
             await pro.start()
-            if isSample {                         // no permission prompts in the demo
+            if isSample {                         // no calendar or health permissions in the demo
+                if hasPro { askGemini = gemini.needsAnswer }
                 await updateEnergy()
                 await listen()
                 return
@@ -175,11 +181,20 @@ struct ContentView: View {
         }
         .onChange(of: hasPro, initial: true) {
             chat.proEnabled = hasPro
+            if !hasPro { mentor.end() }
+            if hasPro { askGemini = gemini.needsAnswer }
             if !canRescue { showRescue = false }
         }
         // Buying Pro from the demo's upgrade screen unlocks the demo too.
         .onChange(of: pro.isPro) { if isSample && pro.isPro { demoPro = true } }
-        .onChange(of: gemini.allowed) { if gemini.allowed != true { chat.endGemini() } }
+        .onChange(of: gemini.allowed) { if gemini.allowed != true { mentor.end(); chat.endGemini() } }
+        .onChange(of: gemini.isActive) { _, active in
+            if active { Task { await considerNudge() } }
+        }
+        .onDisappear { mentor.end() }
+        .onChange(of: chat.isResponding) { _, responding in
+            if responding { mentor.end() }
+        }
         .sheet(isPresented: $showShowcase) { AvatarShowcase() }
         .sheet(isPresented: $showVoicePicker) {
             VoicePicker(voice: voice, isPro: hasPro)
@@ -234,7 +249,7 @@ struct ContentView: View {
             Task {
                 if isSample {
                     if phase == .active { await listen(); await considerNudge() }
-                    if phase == .background { chat.endGemini(); await voice.stopLiveVoice() }
+                    if phase == .background { mentor.end(); chat.endGemini(); await voice.stopLiveVoice() }
                     return
                 }
                 switch phase {
@@ -249,6 +264,7 @@ struct ContentView: View {
                     await listen()
                     await considerNudge()           // back in the app: anything worth saying now?
                 case .background:
+                    mentor.end()
                     chat.endGemini()
                     await voice.stopLiveVoice()
                 default: break
@@ -947,7 +963,22 @@ struct ContentView: View {
 
     @ViewBuilder private var bottomBar: some View {
         VStack(spacing: 10) {
-            if voice.isDictating {
+            if mentor.isActive {
+                MentorCard(line: mentor.line, state: mentor.state,
+                           transcript: voice.transcript, isRecording: voice.isDictating,
+                           isRequesting: mentor.isRequesting, talk: mentor.listenNow, beginTyping: mentor.beginTyping,
+                           change: calendar.pendingChange,
+                           answer: mentor.answer, end: { withAnimation(.snappy) { mentor.end() } },
+                           confirm: {
+                               let result = calendar.confirmPendingChange()
+                               mentor.answer("The user tapped Confirm. The calendar reported: \(result). Briefly acknowledge the result.")
+                           }, cancel: {
+                               calendar.pendingChange = nil
+                               mentor.answer("The user tapped Cancel. The proposed calendar change was discarded. Briefly acknowledge this.")
+                           })
+                    .padding(.horizontal, 16)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else if voice.isDictating {
                 DictationBar(level: voice.inputLevel, since: voice.dictationStarted ?? .now,
                              isSending: voice.isFinishing,
                              cancel: voice.cancelDictation, send: voice.finishDictation)
@@ -1135,12 +1166,17 @@ struct ContentView: View {
     /// walk away it stops by itself.
     private func talk() {
         UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+        if mentor.isActive {                  // in a check-in: send now, or cut him short and listen
+            if voice.isDictating { voice.finishDictation() } else { mentor.listenNow() }
+            return
+        }
         if voice.isDictating { voice.finishDictation() } else { voice.startDictation() }
     }
 
     /// Listens for "twin" from the moment the app opens. Answers appear under Dash.
     private func listen() async {
         await voice.startLiveVoice { sentence in
+            if mentor.isActive { mentor.answer(sentence); return }
             guard !chat.isResponding else { return }
             Task { await chat.send(sentence) }
         }
@@ -1182,8 +1218,14 @@ struct ContentView: View {
     /// Lets Dash bring something up on his own when nothing else is happening. The forecast,
     /// the plan and the calendar only come into it with Pro; the week and a long sit don't.
     private func considerNudge() async {
+        if hasPro, chat.canMentor, !mentor.isActive, !chat.isResponding,
+           !voice.isDictating, calendar.pendingChange == nil, let existing = nudge {
+            nudge = nil
+            mentor.start(topic: existing.line)
+            return
+        }
         if let at = nudgeAt, Date.now.timeIntervalSince(at) > 30 * 60 { nudge = nil }  // stale by now
-        guard nudge == nil, !voice.isDictating, !chat.isResponding,
+        guard nudge == nil, !mentor.isActive, !voice.isDictating, !chat.isResponding,
               calendar.pendingChange == nil else { return }
 
         let now = planningNow
@@ -1194,18 +1236,28 @@ struct ContentView: View {
             events: planning ? currentEvents : [],
             suggestions: planning ? plannedItems.filter { $0.kind == .suggestion } : [],
             stepsLastTwoHours: isSample ? nil : await health.steps(since: now.addingTimeInterval(-2 * 3600)),
-            hasWeekRecap: !(energyModel.map { WeekRecap.lines(history: signalHistory, model: $0) } ?? []).isEmpty)
+            hasWeekRecap: !(energyModel.map { WeekRecap.lines(history: signalHistory, model: $0) } ?? []).isEmpty,
+            stepWalk: stepPace.flatMap { pace in
+                calendar.upcomingWalk(after: now).map { pace.message(walkAt: $0.startDate) }
+            })
 
         var log = isSample ? sampleNudgeLog : DashNudges.Log.load()
         let found = DashNudges.next(situation, quiet: effectivePreferences.isQuiet(now), log: &log)
         if isSample { sampleNudgeLog = log } else { log.save() }
         guard let found else { return }
 
-        withAnimation(.snappy) { nudge = found }
-        nudgeAt = .now
         dashGesture = nil                                 // a fresh value, so he waves again
         DispatchQueue.main.async { dashGesture = AvatarGesture.all.first { $0.clip == "wave" } }
-        if voice.speaksAnswers { voice.speak(found.line) }
+        // Pro: he talks it through with you. Free, or no model to talk with: one line to take up or not.
+        if hasPro, chat.canMentor {
+            withAnimation(.snappy) {
+                mentor.start(topic: found.line)
+            }
+            return
+        }
+        withAnimation(.snappy) { nudge = found }
+        nudgeAt = .now
+        if !hasPro, voice.speaksAnswers { voice.speak(found.line) }
     }
 
     /// Where today's steps are heading, and every couple of hours a walk if you're behind.

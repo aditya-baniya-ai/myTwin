@@ -28,14 +28,14 @@ struct GeminiPermissionSheet: View {
                 choice("With Gemini", tint: BrandTitle.brand[1], fill: BrandTitle.brand[1].opacity(0.12), points: [
                     ("waveform", "A natural, human-sounding voice"),
                     ("brain.head.profile", "Smarter answers about your sleep, energy and plans"),
-                    ("cloud", "What you say or type, your health summary and today's calendar go to Google's servers"),
+                    ("cloud", "What you say or type, your goals, health summary, energy forecast and calendar go to Google's servers"),
                 ])
                 choice("Without Gemini", tint: .secondary, fill: Color(.secondarySystemBackground), points: [
                     ("lock.iphone", "Everything stays on your iPhone"),
                     ("text.bubble", "Simpler answers and the standard iPhone voice"),
                 ])
 
-                Text("If you allow it, myTwin uses Gemini whenever you're online, without asking again. Offline, it always answers on your iPhone.")
+                Text("If you allow it, myTwin uses Gemini whenever you're online, without asking again. Pro mentor conversations need Gemini and an internet connection. Other chat can answer on your iPhone offline.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

@@ -7,7 +7,7 @@ import Foundation
 final class GeminiChat {
     /// No news from Gemini for this long means the connection is stuck: give up, so the
     /// iPhone can answer instead.
-    private let stallLimit: TimeInterval = 12
+    private let stallLimit: TimeInterval = 45
 
     private let access: GeminiAccess
     private let voice: VoiceManager
@@ -22,10 +22,12 @@ final class GeminiChat {
     private var lastEvent = Date.now
     private var attempt = 0
 
+    private let mentor: Bool
     private let plan: TodayPlanSource
 
     init(access: GeminiAccess, voice: VoiceManager, calendar: CalendarManager,
-         health: HealthManager, plan: TodayPlanSource) {
+         health: HealthManager, plan: TodayPlanSource, mentor: Bool = false) {
+        self.mentor = mentor
         self.access = access
         self.voice = voice
         self.calendar = calendar
@@ -37,7 +39,9 @@ final class GeminiChat {
     /// Returns false if Gemini couldn't be reached, so the iPhone can answer instead.
     func answer(_ text: String, onWords: @escaping (String) -> Void) async -> Bool {
         guard let key = access.apiKey else { return false }
+        guard finished == nil else { return false }
         attempt += 1
+        let mine = attempt
         outcome = nil
         heardSomething = false
         lastEvent = .now
@@ -46,19 +50,26 @@ final class GeminiChat {
 
         do {
             let live = try await connection(key: key)
+            guard mine == attempt else { return false }
             try await live.ask(text)
         } catch {
+            guard mine == attempt else { return false }
             close()
             return false
         }
-        watch(attempt)
+        guard mine == attempt else { return false }
+        watch(mine)
         if let outcome { return outcome }
         return await withCheckedContinuation { finished = $0 }
     }
 
     func close() {
-        live?.close()
+        attempt += 1
+        let old = live
         live = nil
+        old?.close()
+        onWords = nil
+        finish(false)
     }
 
     // MARK: - Connection
@@ -67,13 +78,15 @@ final class GeminiChat {
     private func connection(key: String) async throws -> GeminiLive {
         if let live { return live }
         let live = GeminiLive(apiKey: key)
-        try await live.open(instructions: Self.instructions(), tools: Self.tools)
         self.live = live
+        try await live.open(instructions: Self.instructions(mentor: mentor), tools: Self.tools)
+        guard self.live === live else { throw CancellationError() }
         Task { for await event in live.events { await handle(event, from: live) } }
         return live
     }
 
     private func handle(_ event: GeminiLive.Event, from source: GeminiLive) async {
+        guard live === source else { return }
         lastEvent = .now
         switch event {
         case .speech(let pcm):
@@ -122,8 +135,11 @@ final class GeminiChat {
 
     // MARK: - What Gemini knows and can do
 
-    private static func instructions() -> String {
-        """
+    static func instructions(mentor: Bool = false) -> String {
+        if mentor {
+            return ChatManager.mentorInstructions + "\nIt is now \(Date.now.formatted(date: .complete, time: .shortened)) in \(TimeZone.current.identifier). Use the user’s local time. Never say calendar changes are saved before confirmation."
+        }
+        return """
         You are myTwin, a warm, upbeat assistant inside an app that tracks the user's energy. You help them plan their day around it.
         It is now \(Date.now.formatted(date: .complete, time: .shortened)) in \(TimeZone.current.identifier), the user's own time zone. Always answer in that time, never UTC.
         Use getTodayEvents for questions about today's schedule, and only mention events it returns.

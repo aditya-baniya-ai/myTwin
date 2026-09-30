@@ -31,7 +31,8 @@ final class GeminiAccess {
     var isActive: Bool { allowed == true && apiKey != nil && isOnline }
 
     init() {
-        allowed = UserDefaults.standard.object(forKey: Self.decisionKey) as? Bool
+        allowed = UserDefaults.standard.object(forKey: Self.decisionKey) == nil
+            ? nil : UserDefaults.standard.bool(forKey: Self.decisionKey)
         let key = (Bundle.main.object(forInfoDictionaryKey: "GeminiAPIKey") as? String)?
             .trimmingCharacters(in: .whitespaces)
         apiKey = key?.isEmpty == false ? key : nil
