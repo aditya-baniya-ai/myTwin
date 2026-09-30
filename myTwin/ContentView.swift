@@ -57,6 +57,8 @@ struct ContentView: View {
     @State private var showVoicePicker = false
     @State private var showChat = false
     @State private var askGemini = false
+    @State private var pendingMentor = false
+    @State private var mentorProblem: String?
     /// Moved on at the top of each hour, when the drain curve and the widget move on.
     @State private var now = Date.now
     @State private var energy: EnergyReading?
@@ -126,7 +128,12 @@ struct ContentView: View {
                 weights = await health.weights()
             }
         }
-        .sheet(isPresented: $askGemini) {
+        .sheet(isPresented: $askGemini, onDismiss: {
+            if pendingMentor {
+                pendingMentor = false
+                if gemini.allowed == true { startMentor() }
+            }
+        }) {
             GeminiPermissionSheet { gemini.allowed = $0 }
         }
         .navigationDestination(isPresented: $showChat) {
@@ -312,6 +319,7 @@ struct ContentView: View {
                 if isSample { sampleBanner }
                 twinContent.frame(height: asksCheckIn ? 420 : 520)   // Dash takes the card's room
                 tomorrowCard
+                mentorEntry
                 supportCard
                 // Checked every minute, so the question comes the minute an activity ends.
                 TimelineView(.everyMinute) { _ in
@@ -584,27 +592,66 @@ struct ContentView: View {
         }
     }
 
-    /// From 5 PM on Dash's page: a nudge to write tomorrow's goals, and how many you have.
-    @ViewBuilder private var tomorrowCard: some View {
-        if isSample || Calendar.current.component(.hour, from: planningNow) >= 17 {
-            let written = goals.day(Calendar.current.date(byAdding: .day, value: 1, to: planningNow) ?? planningNow).goals.count
-            Button { withAnimation(.snappy) { tab = .tomorrow } } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "sun.horizon.fill").font(.title2).foregroundStyle(.orange)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Plan tomorrow").font(.headline)
-                        Text(written == 0 ? "Write down what you want to get done."
-                                          : "\(written) goal\(written == 1 ? "" : "s") written. Review or plan them.")
-                            .font(.subheadline).foregroundStyle(.secondary)
-                    }
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.right").foregroundStyle(.secondary)
+    /// Planning is available all day in personal mode and in the guest demo.
+    private var tomorrowCard: some View {
+        let written = goals.day(Calendar.current.date(byAdding: .day, value: 1, to: planningNow) ?? planningNow).goals.count
+        return Button { withAnimation(.snappy) { tab = .tomorrow } } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "sun.horizon.fill").font(.title2).foregroundStyle(.orange)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Plan tomorrow").font(.headline)
+                    Text(written == 0 ? "Write down what you want to get done."
+                                      : "\(written) goal\(written == 1 ? "" : "s") written. Review or plan them.")
+                        .font(.subheadline).foregroundStyle(.secondary)
                 }
-                .contentShape(.rect)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right").foregroundStyle(.secondary)
             }
-            .buttonStyle(.plain)
-            .dashboardCard()
+            .contentShape(.rect)
         }
+        .buttonStyle(.plain)
+        .dashboardCard()
+        .accessibilityIdentifier("planTomorrowEntry")
+    }
+
+    /// A personal account needn't wait for a forecast, a nudge or a particular hour.
+    private var mentorEntry: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button(action: startMentor) {
+                Label("Start conversation", systemImage: "bubble.left.and.waveform.bubble.right")
+                    .font(.headline)
+            }
+            .accessibilityIdentifier("startMentor")
+            .disabled(mentor.isActive || chat.isResponding || voice.isDictating)
+            Text(mentorProblem ?? (hasPro
+                ? "Talk or type with Dash about your day and goals. Uses Gemini voice."
+                : "A conversation with Dash, included with myTwin Pro."))
+                .font(.subheadline).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .dashboardCard()
+    }
+
+    private func startMentor() {
+        mentorProblem = nil
+        guard hasPro else { upgrade("Conversations with Dash"); return }
+        guard gemini.apiKey != nil else {
+            mentorProblem = "Gemini isn't configured in this build. Install a build with Gemini enabled."
+            return
+        }
+        guard gemini.allowed == true else {
+            pendingMentor = true
+            askGemini = true
+            return
+        }
+        guard gemini.isOnline else {
+            mentorProblem = "Connect to the internet to start a conversation with Dash."
+            return
+        }
+        guard !mentor.isActive, !chat.isResponding, !voice.isDictating else { return }
+        chat.proEnabled = hasPro
+        nudge = nil
+        mentor.start(topic: "The user wants to talk through their day and goals. Use the available data and ask what matters most. If data is missing, ask about their priorities without inventing a forecast.")
     }
 
     /// Today in detail, or the week at a glance.

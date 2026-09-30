@@ -40,8 +40,12 @@ struct ProPaywall: View {
             // The dashboard's paywall doesn't close itself, so it lands you back where
             // you were, the same way myTwin's own does.
             RevenueCatUI.PaywallView(offering: offering)
-                .onPurchaseCompleted { _ in dismiss() }
+                .onPurchaseCompleted { info in
+                    pro.apply(info)
+                    dismiss()
+                }
                 .onRestoreCompleted { info in
+                    pro.apply(info)
                     if info.entitlements[Subscription.entitlement]?.isActive == true { dismiss() }
                 }
         } else {

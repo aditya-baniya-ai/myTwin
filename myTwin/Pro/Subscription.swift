@@ -37,6 +37,11 @@ final class Subscription {
         }
     }
 
+    /// Apply the verified purchase/restore result before the paywall dismisses.
+    func apply(_ info: CustomerInfo) {
+        isPro = info.entitlements[Self.entitlement]?.isActive == true
+    }
+
     func loadOfferings() async {
         guard Purchases.isConfigured else { return }
         problem = nil
